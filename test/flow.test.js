@@ -4,27 +4,27 @@ import lead, { toDatabaseRecord } from "../netlify/functions/lead.mjs";
 
 test("lead rechaza métodos distintos de POST", async () => {
   const result = await lead(new Request("https://example.test", { method: "GET" }));
-  assert.equal(result.statusCode, 405);
+  assert.equal(result.status, 405);
 });
 
 test("lead exige JSON válido", async () => {
   const result = await lead(new Request("https://example.test", { method: "POST", body: "{" }));
-  assert.equal(result.statusCode, 400);
+  assert.equal(result.status, 400);
 });
 
 test("lead exige un evento", async () => {
   const result = await lead(new Request("https://example.test", { method: "POST", body: JSON.stringify({ name: "Ana" }) }));
-  assert.equal(result.statusCode, 422);
+  assert.equal(result.status, 422);
 });
 
 test("lead acepta un evento medible sin servicios externos", async () => {
   const result = await lead(new Request("https://example.test", { method: "POST", body: JSON.stringify({ event: "page_view", sessionId: "abc" }) }));
-  assert.equal(result.statusCode, 202);
+  assert.equal(result.status, 202);
 });
 
 test("lead elimina campos no autorizados", async () => {
   const result = await lead(new Request("https://example.test", { method: "POST", body: JSON.stringify({ event: "page_view", secret: "no" }) }));
-  assert.equal(JSON.parse(result.body).accepted, true);
+  assert.equal((await result.json()).accepted, true);
 });
 
 test("convierte campos web al esquema de Supabase", () => {

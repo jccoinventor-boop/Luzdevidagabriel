@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import lead from "../netlify/functions/lead.mjs";
+import lead, { toDatabaseRecord } from "../netlify/functions/lead.mjs";
 
 test("lead rechaza métodos distintos de POST", async () => {
   const result = await lead(new Request("https://example.test", { method: "GET" }));
@@ -25,4 +25,18 @@ test("lead acepta un evento medible sin servicios externos", async () => {
 test("lead elimina campos no autorizados", async () => {
   const result = await lead(new Request("https://example.test", { method: "POST", body: JSON.stringify({ event: "page_view", secret: "no" }) }));
   assert.equal(JSON.parse(result.body).accepted, true);
+});
+
+test("convierte campos web al esquema de Supabase", () => {
+  const record = toDatabaseRecord({
+    event: "qualified_lead",
+    sessionId: "abc",
+    priceAccepted: "Sí, estoy de acuerdo",
+    attribution: { utm_source: "tiktok" }
+  });
+  assert.equal(record.session_id, "abc");
+  assert.equal(record.price_accepted, "Sí, estoy de acuerdo");
+  assert.deepEqual(record.attribution, { utm_source: "tiktok" });
+  assert.equal("sessionId" in record, false);
+  assert.equal("priceAccepted" in record, false);
 });

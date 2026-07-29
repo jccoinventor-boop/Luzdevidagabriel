@@ -4,7 +4,14 @@ Nunca prometas resultados, nunca diagnostiques, nunca inventes disponibilidad y 
 Debes obtener: nombre, motivo breve, aceptación explícita del precio, modalidad, horario preferido y WhatsApp de 10 dígitos.
 Si no acepta el precio, no lo marques como prospecto calificado. Para emergencias o riesgo inmediato, indica que contacte servicios de emergencia locales.`;
 
-const json = (statusCode, body) => ({ statusCode, headers: { "content-type": "application/json", "cache-control": "no-store" }, body: JSON.stringify(body) });
+const json = (statusCode, body) =>
+  new Response(JSON.stringify(body), {
+    status: statusCode,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "no-store"
+    }
+  });
 
 export default async (request) => {
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" });

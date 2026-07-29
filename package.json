@@ -1,0 +1,14 @@
+{
+  "name": "luz-de-vida-gabriel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

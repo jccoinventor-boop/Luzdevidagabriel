@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs",
+    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs && node --check netlify/functions/whatsapp.mjs && node --check netlify/functions/lib/qualification.mjs",
     "build": "node scripts/build.mjs"
   },
   "engines": {

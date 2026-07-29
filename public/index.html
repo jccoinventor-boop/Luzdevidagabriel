@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Consulta espiritual con Gabriel por $100 MXN. Atención por teléfono, videollamada o presencial en Atlacomulco y alrededores.">
+  <meta name="theme-color" content="#100b18">
+  <meta property="og:title" content="Luz de Vida Gabriel | Consulta espiritual">
+  <meta property="og:description" content="Habla con Gabriel y agenda tu consulta por $100 MXN.">
+  <meta property="og:type" content="website">
+  <title>Luz de Vida Gabriel | Consulta espiritual $100</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#inicio" aria-label="Luz de Vida Gabriel, inicio">
+      <span class="brand-mark">✦</span>
+      <span>Luz de Vida <b>Gabriel</b></span>
+    </a>
+    <a class="nav-cta track-whatsapp" href="#" data-wa-source="nav">Agendar por WhatsApp</a>
+  </header>
+
+  <main>
+    <section class="hero" id="inicio">
+      <div class="hero-glow"></div>
+      <div class="hero-copy">
+        <p class="eyebrow">Orientación espiritual · Atlacomulco</p>
+        <h1>Cuando necesitas claridad, empieza por hablarlo.</h1>
+        <p class="lede">Consulta espiritual privada con Gabriel para revisar la situación que te preocupa y ayudarte a verla con mayor claridad.</p>
+        <div class="offer">
+          <span class="price">$100 <small>MXN</small></span>
+          <span>por consulta</span>
+        </div>
+        <div class="hero-actions">
+          <button class="primary" data-open-chat>Revisar disponibilidad</button>
+          <a class="secondary track-whatsapp" href="#" data-wa-source="hero">Escribir por WhatsApp</a>
+        </div>
+        <p class="micro">Por teléfono, videollamada o presencial en Atlacomulco y alrededores.</p>
+      </div>
+      <aside class="trust-card" aria-label="Cómo funciona">
+        <p class="card-kicker">Proceso claro</p>
+        <ol>
+          <li><span>1</span><div><b>Cuéntanos brevemente</b><small>qué situación deseas revisar.</small></div></li>
+          <li><span>2</span><div><b>Elige modalidad y horario</b><small>según disponibilidad real.</small></div></li>
+          <li><span>3</span><div><b>Confirma con Gabriel</b><small>por WhatsApp antes de la consulta.</small></div></li>
+        </ol>
+      </aside>
+    </section>
+
+    <section class="topics" aria-labelledby="topics-title">
+      <p class="eyebrow">Motivos de consulta</p>
+      <h2 id="topics-title">Un espacio para ordenar lo que estás viviendo</h2>
+      <div class="topic-grid">
+        <article><span>♡</span><h3>Amor y relaciones</h3><p>Dudas, distanciamiento y decisiones personales.</p></article>
+        <article><span>◇</span><h3>Trabajo y dinero</h3><p>Inquietudes y caminos que necesitas valorar.</p></article>
+        <article><span>☾</span><h3>Energía y sueños</h3><p>Experiencias o sensaciones que deseas comprender.</p></article>
+        <article><span>✧</span><h3>Claridad personal</h3><p>Una conversación enfocada en tu situación actual.</p></article>
+      </div>
+    </section>
+
+    <section class="conversion">
+      <div>
+        <p class="eyebrow">Agenda sin vueltas</p>
+        <h2>Confirma primero si esta consulta es para ti.</h2>
+        <p>El asistente te hará preguntas breves, verificará que aceptas el costo y preparará tu solicitud para Gabriel.</p>
+      </div>
+      <button class="primary" data-open-chat>Comenzar ahora</button>
+    </section>
+
+    <section class="disclaimer">
+      <h2>Información importante</h2>
+      <p>El servicio ofrece orientación espiritual y no sustituye atención médica, psicológica, legal, financiera ni de emergencia. No se prometen resultados específicos. Si existe peligro inmediato, contacta a los servicios de emergencia de tu localidad.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>© <span id="year"></span> Luz de Vida Gabriel · Atlacomulco, Estado de México</p>
+    <p><a href="mailto:luzdevidagabriel@gmail.com">luzdevidagabriel@gmail.com</a> · TikTok e Instagram: @luzdevidagabriel</p>
+  </footer>
+
+  <a class="wa-float track-whatsapp" href="#" data-wa-source="floating" aria-label="Agendar por WhatsApp">WA</a>
+
+  <dialog id="chat" aria-labelledby="chat-title">
+    <div class="chat-head">
+      <div><small>Asistente de Gabriel</small><h2 id="chat-title">Vamos a preparar tu cita</h2></div>
+      <button class="close" data-close-chat aria-label="Cerrar">×</button>
+    </div>
+    <div id="messages" class="messages" aria-live="polite"></div>
+    <form id="chat-form" class="chat-form">
+      <label class="sr-only" for="chat-input">Tu respuesta</label>
+      <input id="chat-input" autocomplete="off" maxlength="300" placeholder="Escribe tu respuesta…" required>
+      <button type="submit">Enviar</button>
+    </form>
+    <div id="quick-replies" class="quick-replies"></div>
+  </dialog>
+</body>
+</html>

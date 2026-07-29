@@ -16,6 +16,13 @@ create table if not exists public.gabriel_lead_events (
   received_at timestamptz not null default now()
 );
 
+alter table public.gabriel_lead_events
+  add column if not exists provider_message_id text;
+
+create unique index if not exists gabriel_events_provider_message_idx
+  on public.gabriel_lead_events(provider_message_id)
+  where provider_message_id is not null;
+
 alter table public.gabriel_lead_events enable row level security;
 revoke all on public.gabriel_lead_events from anon, authenticated;
 
@@ -93,3 +100,17 @@ $$;
 
 revoke all on function public.gabriel_slot_is_available(timestamptz, timestamptz)
   from public, anon, authenticated;
+
+create table if not exists public.gabriel_whatsapp_sessions (
+  phone text primary key,
+  state text not null default 'awaiting_name',
+  lead jsonb not null default '{}'::jsonb,
+  last_message_id text,
+  qualified boolean not null default false,
+  handoff boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.gabriel_whatsapp_sessions enable row level security;
+revoke all on public.gabriel_whatsapp_sessions from anon, authenticated;

@@ -17,9 +17,9 @@ Landing de conversión y recepción para consultas espirituales de Gabriel en At
 
 ## Estado honesto
 
-Funciona desde el despliegue: landing, WhatsApp, filtro web, preparación de solicitud y captura de eventos.
+Funciona desde el despliegue: landing, WhatsApp, filtro web determinista, preparación de solicitud y captura de eventos.
 
-Requiere configuración externa: persistencia en Supabase, respuestas generativas, llamadas telefónicas, calendario y notificaciones privadas. La cita se mantiene como pendiente hasta que Gabriel confirma la disponibilidad.
+Requiere configuración externa: persistencia en Supabase, llamadas telefónicas, calendario y notificaciones privadas. La función generativa de OpenAI está preparada en el backend, pero no forma parte del flujo visible hasta completar controles, pruebas y medición. La cita se mantiene como pendiente hasta que Gabriel confirma la disponibilidad.
 
 ## Desarrollo
 

@@ -1,8 +1,11 @@
-const json = (statusCode, body) => ({
-  statusCode,
-  headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-  body: JSON.stringify(body)
-});
+const json = (statusCode, body) =>
+  new Response(JSON.stringify(body), {
+    status: statusCode,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store"
+    }
+  });
 
 function sanitize(input) {
   const allowed = ["event", "sessionId", "name", "topic", "priceAccepted", "modality", "availability", "phone", "status", "reason", "source", "at", "attribution"];

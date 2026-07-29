@@ -47,6 +47,30 @@ El número oficial del sitio y de los mensajes prellenados es
 usa `wa.me`, que abre WhatsApp o WhatsApp Business según la aplicación instalada
 en el dispositivo. `PUBLIC_WHATSAPP` debe conservar ese mismo valor en Netlify.
 
+El agente usa la API oficial de WhatsApp Cloud y recibe mensajes en:
+`https://luzdevidagabriel.netlify.app/webhooks/whatsapp`.
+
+Reglas operativas:
+
+- La firma `X-Hub-Signature-256` se valida con `META_APP_SECRET`.
+- Cada mensaje se registra una sola vez mediante su identificador de Meta.
+- La sesión se conserva en `gabriel_whatsapp_sessions`.
+- Aceptar el precio no basta: exige nombre, motivo, modalidad y horario.
+- Un mensaje de riesgo se deriva a revisión humana y nunca se agenda.
+- Sin calendario real, el estado final es `qualified_pending_slot`, no confirmado.
+
+Variables privadas necesarias:
+
+- `WHATSAPP_VERIFY_TOKEN`
+- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_PHONE_NUMBER_ID`
+- `META_APP_SECRET`
+- `META_GRAPH_API_VERSION`
+
+El token, el secreto y el identificador del número se obtienen en la aplicación
+de Meta propiedad del negocio. Nunca se escriben en GitHub, archivos públicos o
+mensajes de chat.
+
 ## Supabase
 
 Ejecutar `sql/supabase.sql` una vez en el proyecto de Supabase. Después agregar

@@ -38,8 +38,8 @@ async function supabase(path, options = {}) {
   });
 }
 
-async function loadSession(phone) {
-  const response = await supabase(`gabriel_whatsapp_sessions?phone=eq.${encodeURIComponent(phone)}&select=state,lead&limit=1`);
+export async function loadSession(phone) {
+  const response = await supabase(`gabriel_whatsapp_sessions?phone=eq.${encodeURIComponent(phone)}&select=state,lead,last_message_id&limit=1`);
   if (!response.ok) throw new Error("session_read_failed");
   const rows = await response.json();
   return rows[0] || {};

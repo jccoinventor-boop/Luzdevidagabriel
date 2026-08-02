@@ -16,3 +16,8 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+[[redirects]]
+  from = "/webhooks/whatsapp"
+  to = "/.netlify/functions/whatsapp"
+  status = 200

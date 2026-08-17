@@ -8,7 +8,7 @@ const json = (statusCode, body) =>
   });
 
 function sanitize(input) {
-  const allowed = ["event", "sessionId", "name", "topic", "priceAccepted", "modality", "availability", "phone", "status", "reason", "source", "at", "attribution"];
+  const allowed = ["event", "sessionId", "name", "topic", "priceAccepted", "modality", "availability", "phone", "status", "reason", "source", "at", "attribution", "finalConfirmation", "bookingConfirmedIntent"];
   return Object.fromEntries(allowed.filter(key => input[key] !== undefined).map(key => [key, typeof input[key] === "string" ? input[key].slice(0, 500) : input[key]]));
 }
 
@@ -27,6 +27,8 @@ export function toDatabaseRecord(body) {
     source: body.source,
     attribution: body.attribution || {},
     at: body.at,
+    final_confirmation: body.finalConfirmation,
+    booking_confirmed_intent: body.bookingConfirmedIntent === true,
     received_at: new Date().toISOString()
   };
 }

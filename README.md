@@ -1,29 +1,67 @@
 # Luz de Vida Gabriel
 
-Landing de conversión y recepción para consultas espirituales de Gabriel en Atlacomulco.
+Sistema de adquisición, calificación y agenda para las consultas espirituales de Gabriel en Atlacomulco.
+
+## Objetivo
+
+Convertir tráfico de TikTok, Instagram, Facebook y la landing en consultas reales, filtrando curiosos antes de ocupar la agenda.
+
+## Oferta oficial
+
+- Consulta inicial: **$100 MXN**.
+- Modalidades: teléfono, videollamada o presencial.
+- WhatsApp: **+52 712 246 6811**.
+- Correo: `luzdevidagabriel@gmail.com`.
+- TikTok / Instagram: `@luzdevidagabriel`.
 
 ## Incluye
 
-- oferta clara de $100 MXN;
-- atención por teléfono, videollamada o presencial;
-- WhatsApp `+52 712 246 6811`;
-- asistente determinista gratuito que filtra aceptación del precio;
+- landing de conversión;
+- botón flotante y enlaces de WhatsApp;
+- asistente web determinista gratuito;
+- aceptación explícita del precio;
+- confirmación final `SÍ CONFIRMO MI CITA`;
 - captura de atribución UTM;
-- eventos para conversación, calificación y solicitud;
-- almacenamiento opcional en Supabase;
-- modelo de citas, estados y control de disponibilidad en Supabase;
-- calendario operativo separado `Luz de Vida Gabriel`;
-- chat de servidor sin OpenAI ni consumo de API;
-- webhook oficial para un agente de WhatsApp Cloud API;
-- sesiones persistentes, idempotencia y reglas de calificación en servidor;
+- eventos de embudo;
+- Supabase como CRM operativo;
+- sesiones persistentes de WhatsApp;
+- webhook oficial de WhatsApp Cloud API;
+- idempotencia de mensajes de Meta;
+- modelo de citas y control de solapamiento;
+- plantillas de mensajes;
+- tareas de seguimiento;
+- campañas y métricas diarias;
+- dashboards SQL;
+- derivación de emergencias a humano;
 - plan de marketing de 30 días;
-- arquitectura documentada para llamadas y calendario.
+- arquitectura preparada para Google Calendar y llamadas.
 
-## Estado honesto
+## Regla de cita
 
-Funciona desde el despliegue: landing, WhatsApp, filtro web determinista, preparación de solicitud, captura de eventos y chat de servidor gratuito.
+Aceptar $100 no basta. El prospecto debe completar nombre, motivo, precio, modalidad, horario y confirmar explícitamente `SÍ CONFIRMO MI CITA`.
 
-Requiere configuración externa: credenciales privadas del proyecto Supabase, alta del número en Meta WhatsApp Cloud API, creación y autorización del calendario secundario, llamadas telefónicas y notificaciones privadas. El webhook de WhatsApp y su filtro están implementados, pero no reciben mensajes hasta que Meta valide el endpoint y se carguen las variables privadas. No se necesita `OPENAI_API_KEY` ni `OPENAI_MODEL`. La cita se mantiene como pendiente hasta que un calendario real confirme la disponibilidad.
+Eso genera un prospecto `qualified_pending_slot`, no una cita confirmada.
+
+Una cita sólo debe considerarse **confirmada** cuando:
+
+1. Google Calendar confirme un horario libre y exista el evento real; y
+2. `gabriel_appointments.status = 'confirmed'` con `google_event_id` correspondiente.
+
+## Estado verificado
+
+- Repositorio principal: `jccoinventor-boop/Luzdevidagabriel`.
+- Supabase: proyecto `Luz de vida Gabriel` con tablas de prospectos, sesiones, citas, configuración, mensajes, seguimiento, campañas y métricas.
+- WhatsApp: código de webhook y calificación implementado.
+- Calendar: la arquitectura está definida, pero el calendario secundario y su autorización todavía deben activarse antes de afirmar agenda automática.
+- Llamadas: arquitectura definida, no activa hasta configurar proveedor/número y pruebas reales.
+
+## Documentación
+
+- `docs/MASTER_PLAN.md`: arquitectura y operación unificada.
+- `docs/MARKETING_30_DAYS.md`: motor de adquisición.
+- `docs/VOICE_AND_CALENDAR.md`: llamadas, Calendar y WhatsApp.
+- `sql/supabase.sql`: esquema base.
+- `sql/20260817_complete_operating_system.sql`: ampliación CRM/marketing/seguimiento.
 
 ## Desarrollo
 
@@ -33,6 +71,6 @@ npm run check
 npm run build
 ```
 
-## Despliegue en Netlify
+## Despliegue
 
-Conectar este repositorio y usar la configuración incluida en `netlify.toml`. Las variables se agregan en la configuración del sitio; nunca deben subirse al repositorio.
+Netlify usa `netlify.toml`. Todas las credenciales se cargan como variables privadas del sitio. Nunca subir tokens, secretos, service-role keys ni refresh tokens al repositorio.

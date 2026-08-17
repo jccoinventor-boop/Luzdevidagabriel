@@ -1,6 +1,7 @@
 const RISK_PATTERN = /\b(suicid|matarme|hacerme daño|hacer daño|violencia|amenaza|emergencia|secuestro|desaparecid[oa]|arma)\b/i;
 const YES_PATTERN = /^(sí|si|acepto|de acuerdo|estoy de acuerdo|confirmo)([,!. ]|$)/i;
-const NO_PATTERN = /^(no|todavía no|aún no|no acepto)([,!. ]|$)/i;
+const NO_PATTERN = /^(no|todavía no|aún no|no acepto|no estoy seguro|lo voy a pensar)([,!. ]|$)/i;
+const FINAL_CONFIRMATION_PATTERN = /^s[ií]\s+confirmo\s+mi\s+cita([,!. ]|$)/i;
 
 export const INITIAL_STATE = "awaiting_name";
 
@@ -14,6 +15,10 @@ export function isRiskMessage(text) {
 
 export function isExplicitAcceptance(text) {
   return YES_PATTERN.test(normalizeText(text)) && !NO_PATTERN.test(normalizeText(text));
+}
+
+export function isFinalBookingConfirmation(text) {
+  return FINAL_CONFIRMATION_PATTERN.test(normalizeText(text));
 }
 
 export function nextTurn(session = {}, rawText = "") {
@@ -62,11 +67,27 @@ export function nextTurn(session = {}, rawText = "") {
   if (state === "awaiting_availability") {
     if (text.length < 5) return same(state, lead, "Indica un día y una hora aproximada, por ejemplo: “jueves a las 5 pm”.");
     lead.availability = text.slice(0, 200);
+    return same(
+      "awaiting_final_confirmation",
+      lead,
+      `Resumen de solicitud:\nNombre: ${lead.name}\nTema: ${lead.topic}\nModalidad: ${lead.modality}\nHorario preferido: ${lead.availability}\nCosto: $100 MXN\n\nPara marcarte como prospecto serio, responde exactamente: “SÍ CONFIRMO MI CITA”. La cita quedará pendiente hasta comprobar disponibilidad real.`
+    );
+  }
+
+  if (state === "awaiting_final_confirmation") {
+    if (NO_PATTERN.test(text)) {
+      return { state: "not_qualified", lead: { ...lead, bookingConfirmedIntent: false }, qualified: false, reply: "Entendido. No registraré una cita. Es mejor avanzar sólo cuando estés seguro/a." };
+    }
+    if (!isFinalBookingConfirmation(text)) {
+      return same(state, lead, "Para avanzar necesito confirmación clara. Responde exactamente: “SÍ CONFIRMO MI CITA”. Si no estás seguro/a, responde “No estoy seguro”.");
+    }
+    lead.finalConfirmation = "SÍ CONFIRMO MI CITA";
+    lead.bookingConfirmedIntent = true;
     return {
       state: "qualified_pending_slot",
       lead,
       qualified: true,
-      reply: "Gracias. Cumples los datos para solicitar una cita. Revisaremos ese horario; la cita sólo quedará confirmada cuando recibas fecha y hora definitivas."
+      reply: "Solicitud seria registrada. La cita queda pendiente de comprobar disponibilidad real; Gabriel recibirá los datos y confirmará fecha y hora definitivas por WhatsApp."
     };
   }
 
@@ -75,7 +96,7 @@ export function nextTurn(session = {}, rawText = "") {
   }
 
   if (state === "not_qualified") {
-    if (/reiniciar|empezar|agendar/i.test(text)) return same(INITIAL_STATE, {}, "De acuerdo. Empecemos nuevamente: ¿cómo te llamas?");
+    if (/reiniciar|empezar|agendar|consulta/i.test(text)) return same(INITIAL_STATE, {}, "De acuerdo. Empecemos nuevamente: ¿cómo te llamas?");
     return same(state, lead, "No hay una cita activa. Escribe “agendar” si deseas comenzar otra vez.");
   }
 

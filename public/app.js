@@ -9,10 +9,11 @@ const state = {
 const flow = [
   { key: "name", ask: "Hola, soy el asistente de Gabriel. ¿Cómo te llamas?", validate: v => v.trim().length >= 2 },
   { key: "topic", ask: "Gracias, {name}. ¿Qué situación deseas revisar brevemente?", validate: v => v.trim().length >= 4 },
-  { key: "priceAccepted", ask: "La consulta cuesta $100 MXN. ¿Estás de acuerdo con el precio?", choices: ["Sí, estoy de acuerdo", "Todavía no"], validate: v => /sí|si,|acuerdo/i.test(v) },
+  { key: "priceAccepted", ask: "La consulta cuesta $100 MXN. ¿Estás de acuerdo con el precio?", choices: ["Sí, estoy de acuerdo", "Todavía no"], validate: v => /^(sí|si|acepto|de acuerdo|estoy de acuerdo)([,!. ]|$)/i.test(v) },
   { key: "modality", ask: "¿Qué modalidad prefieres?", choices: ["Teléfono", "Videollamada", "Presencial"], validate: v => /teléfono|telefono|video|presencial/i.test(v) },
-  { key: "availability", ask: "¿Qué día y horario te funciona mejor? Gabriel confirmará la disponibilidad real por WhatsApp.", validate: v => v.trim().length >= 4 },
-  { key: "phone", ask: "Por último, escribe tu número de WhatsApp a 10 dígitos.", validate: v => v.replace(/\D/g, "").length === 10 }
+  { key: "availability", ask: "¿Qué día y horario te funciona mejor? La disponibilidad real se comprobará antes de confirmar.", validate: v => v.trim().length >= 4 },
+  { key: "phone", ask: "Escribe tu número de WhatsApp a 10 dígitos.", validate: v => v.replace(/\D/g, "").length === 10 },
+  { key: "finalConfirmation", ask: "Para marcar tu solicitud como seria, confirma: SÍ CONFIRMO MI CITA. La cita seguirá pendiente hasta comprobar disponibilidad real.", choices: ["SÍ CONFIRMO MI CITA", "Todavía no"], validate: v => /^s[ií]\s+confirmo\s+mi\s+cita([,!. ]|$)/i.test(v) }
 ];
 
 const dialog = document.querySelector("#chat");
@@ -55,11 +56,11 @@ async function answer(value) {
   const current = flow[state.step];
   addMessage(value, "user");
   if (!current.validate(value)) {
-    if (current.key === "priceAccepted") {
-      addMessage("Entiendo. No reservaré una cita todavía. Cuando estés de acuerdo con el costo, puedes volver a escribirnos.");
+    if (current.key === "priceAccepted" || current.key === "finalConfirmation") {
+      addMessage("Entiendo. No registraré una solicitud seria todavía. Cuando estés seguro/a, puedes volver a comenzar.");
       quick.replaceChildren();
       input.disabled = true;
-      track("lead_not_qualified", { reason: "price_not_accepted" });
+      track("lead_not_qualified", { reason: current.key === "priceAccepted" ? "price_not_accepted" : "final_confirmation_missing" });
       return;
     }
     addMessage(current.key === "phone" ? "Necesito un número de 10 dígitos para que Gabriel pueda confirmar." : "¿Puedes darme un poco más de información?");
@@ -70,16 +71,16 @@ async function answer(value) {
   quick.replaceChildren();
   if (state.step < flow.length) return setTimeout(ask, 250);
 
-  const qualified = { ...state.lead, sessionId: state.sessionId, attribution: state.attribution, status: "qualified_pending_confirmation" };
+  const qualified = { ...state.lead, bookingConfirmedIntent: true, sessionId: state.sessionId, attribution: state.attribution, status: "qualified_pending_slot" };
   await fetch("/api/lead", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: "qualified_lead", ...qualified }) }).catch(() => {});
-  const text = `Hola Gabriel, soy ${state.lead.name}. Quiero solicitar una consulta espiritual de $100 MXN. Tema: ${state.lead.topic}. Modalidad: ${state.lead.modality}. Horario preferido: ${state.lead.availability}. Mi WhatsApp: ${state.lead.phone}. Código: ${state.sessionId.slice(0, 8)}`;
-  addMessage("Tu solicitud está preparada. La cita queda pendiente hasta que Gabriel confirme el horario por WhatsApp.");
+  const text = `Hola Gabriel, soy ${state.lead.name}. SÍ CONFIRMO MI CITA y acepto la consulta espiritual de $100 MXN. Tema: ${state.lead.topic}. Modalidad: ${state.lead.modality}. Horario preferido: ${state.lead.availability}. Mi WhatsApp: ${state.lead.phone}. Código: ${state.sessionId.slice(0, 8)}. Entiendo que el horario queda pendiente hasta comprobar disponibilidad real.`;
+  addMessage("Tu solicitud seria está preparada. La cita queda pendiente hasta que se compruebe disponibilidad y Gabriel confirme fecha y hora por WhatsApp.");
   const link = document.createElement("a");
   link.className = "primary";
   link.href = `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
   link.target = "_blank";
   link.rel = "noopener";
-  link.textContent = "Enviar solicitud a Gabriel";
+  link.textContent = "Enviar solicitud confirmada a Gabriel";
   link.addEventListener("click", () => track("qualified_whatsapp_click"));
   messages.append(link);
   input.disabled = true;
@@ -99,7 +100,7 @@ document.querySelector("[data-close-chat]").addEventListener("click", () => dial
 form.addEventListener("submit", e => { e.preventDefault(); const value = input.value; input.value = ""; answer(value); });
 document.querySelectorAll(".track-whatsapp").forEach(link => {
   const source = link.dataset.waSource;
-  const text = `Hola Gabriel, quiero agendar una consulta espiritual de $100 MXN. Llegué desde: ${source}.`;
+  const text = `Hola Gabriel, quiero iniciar el proceso para una consulta espiritual de $100 MXN. Llegué desde: ${source}.`;
   link.href = `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
   link.target = "_blank";
   link.rel = "noopener";

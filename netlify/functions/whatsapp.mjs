@@ -49,7 +49,7 @@ async function saveSession(phone, turn, messageId) {
   const response = await supabase("gabriel_whatsapp_sessions?on_conflict=phone", {
     method: "POST",
     headers: { prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ phone, state: turn.state, lead: turn.lead, last_message_id: messageId, qualified: turn.qualified, handoff: Boolean(turn.handoff), updated_at: new Date().toISOString() })
+    body: JSON.stringify({ phone, state: turn.state, lead: turn.lead, last_message_id: messageId, qualified: turn.qualified, handoff: Boolean(turn.handoff), last_reply: turn.reply, updated_at: new Date().toISOString() })
   });
   if (!response.ok) throw new Error("session_write_failed");
 }
@@ -70,6 +70,8 @@ async function registerEvent(phone, messageId, turn) {
       phone,
       status: turn.state,
       source: "whatsapp",
+      final_confirmation: turn.lead.finalConfirmation || null,
+      booking_confirmed_intent: turn.lead.bookingConfirmedIntent === true,
       received_at: new Date().toISOString()
     })
   });

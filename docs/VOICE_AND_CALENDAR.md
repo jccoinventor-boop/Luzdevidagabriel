@@ -26,6 +26,13 @@ El calendario operativo debe ser uno secundario y separado llamado
 `Luz de Vida Gabriel`. No se deben crear citas en el calendario personal.
 Su identificador se configura en Netlify como `GOOGLE_CALENDAR_ID`.
 
+Activación manual necesaria en Google Calendar:
+
+1. Crear el calendario secundario `Luz de Vida Gabriel` con zona horaria `America/Mexico_City`.
+2. Copiar su identificador desde **Configuración e integración**.
+3. Guardarlo en `gabriel_business_config.google_calendar_id` y como variable privada `GOOGLE_CALENDAR_ID` en Netlify.
+4. Ejecutar una prueba controlada de disponibilidad, alta, modificación y cancelación antes de aceptar citas automáticas.
+
 El adaptador debe implementar estas operaciones:
 
 - `list_available_slots(date_range, modality)`
@@ -54,7 +61,10 @@ Reglas operativas:
 
 - La firma `X-Hub-Signature-256` se valida con `META_APP_SECRET`.
 - Cada mensaje se registra una sola vez mediante su identificador de Meta.
-- La sesión se conserva en `gabriel_whatsapp_sessions`.
+- La sesión se conserva en `gabriel_whatsapp_sessions` con control de versión.
+- `gabriel_whatsapp_inbox` evita reprocesar mensajes y permite reintentos controlados.
+- `gabriel_whatsapp_outbox` conserva la respuesta antes de enviarla a Meta.
+- El trabajo por webhook y por remitente tiene límites explícitos.
 - Aceptar el precio no basta: exige nombre, motivo, modalidad y horario.
 - Un mensaje de riesgo se deriva a revisión humana y nunca se agenda.
 - Sin calendario real, el estado final es `qualified_pending_slot`, no confirmado.
@@ -73,7 +83,10 @@ mensajes de chat.
 
 ## Supabase
 
-Ejecutar `sql/supabase.sql` una vez en el proyecto de Supabase. Después agregar
-`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` sólo como variables privadas de
-Netlify. La clave de servicio nunca debe aparecer en `public/`, en el navegador,
-en GitHub ni en mensajes.
+Para un proyecto nuevo, ejecutar primero `sql/supabase.sql` y después las
+migraciones fechadas de `sql/` en orden. En producción ya están aplicadas hasta
+`20260818_improve_whatsapp_claim_status.sql`.
+
+Agregar `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` sólo como variables privadas
+de Netlify. La clave de servicio nunca debe aparecer en `public/`, en el
+navegador, en GitHub ni en mensajes.

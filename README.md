@@ -25,8 +25,9 @@ Convertir tráfico de TikTok, Instagram, Facebook y la landing en consultas real
 - eventos de embudo;
 - Supabase como CRM operativo;
 - sesiones persistentes de WhatsApp;
+- inbox/outbox durable para reintentos de WhatsApp;
 - webhook oficial de WhatsApp Cloud API;
-- idempotencia de mensajes de Meta;
+- idempotencia, control de concurrencia y límites de mensajes de Meta;
 - modelo de citas y control de solapamiento;
 - plantillas de mensajes;
 - tareas de seguimiento;
@@ -51,7 +52,8 @@ Una cita sólo debe considerarse **confirmada** cuando:
 
 - Repositorio principal: `jccoinventor-boop/Luzdevidagabriel`.
 - Supabase: proyecto `Luz de vida Gabriel` con tablas de prospectos, sesiones, citas, configuración, mensajes, seguimiento, campañas y métricas.
-- WhatsApp: código de webhook y calificación implementado.
+- WhatsApp: webhook, calificación, control de concurrencia e inbox/outbox implementados.
+- Seguridad web: la calificación se vuelve a comprobar en servidor; el navegador sólo puede registrar telemetría de bajo riesgo.
 - Calendar: la arquitectura está definida, pero el calendario secundario y su autorización todavía deben activarse antes de afirmar agenda automática.
 - Llamadas: arquitectura definida, no activa hasta configurar proveedor/número y pruebas reales.
 
@@ -62,6 +64,10 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - `docs/VOICE_AND_CALENDAR.md`: llamadas, Calendar y WhatsApp.
 - `sql/supabase.sql`: esquema base.
 - `sql/20260817_complete_operating_system.sql`: ampliación CRM/marketing/seguimiento.
+- `sql/20260818_finalize_secure_operations.sql`: cierre de permisos, límites web e inbox/outbox de WhatsApp.
+- `sql/20260818_add_followup_indexes.sql`: índices de seguimiento recomendados por Supabase.
+- `sql/20260818_improve_whatsapp_claim_status.sql`: recuperación segura de mensajes y respuestas en curso.
+- `AVATAR-GABRIEL.md`: identidad reutilizable del presentador en HeyGen.
 
 ## Desarrollo
 

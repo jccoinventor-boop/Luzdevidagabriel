@@ -3,7 +3,13 @@ const state = {
   step: 0,
   lead: {},
   sessionId: crypto.randomUUID(),
-  attribution: Object.fromEntries(new URLSearchParams(location.search))
+  attribution: Object.fromEntries(
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "fbclid"]
+      .flatMap(key => {
+        const value = new URLSearchParams(location.search).get(key)?.trim().slice(0, 120);
+        return value ? [[key, value]] : [];
+      })
+  )
 };
 
 const flow = [
@@ -71,8 +77,38 @@ async function answer(value) {
   quick.replaceChildren();
   if (state.step < flow.length) return setTimeout(ask, 250);
 
-  const qualified = { ...state.lead, bookingConfirmedIntent: true, sessionId: state.sessionId, attribution: state.attribution, status: "qualified_pending_slot" };
-  await fetch("/api/lead", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: "qualified_lead", ...qualified }) }).catch(() => {});
+  const validationMessages = [
+    state.lead.name,
+    state.lead.topic,
+    "Sí, acepto",
+    state.lead.modality,
+    state.lead.availability,
+    state.lead.finalConfirmation
+  ].map(content => ({ role: "user", content }));
+  let validation;
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        messages: validationMessages,
+        phone: state.lead.phone,
+        attribution: state.attribution
+      })
+    });
+    validation = response.ok ? await response.json() : null;
+  } catch {
+    validation = null;
+  }
+
+  if (!validation?.qualified) {
+    addMessage("No pude registrar la solicitud de forma segura. Intenta enviarla de nuevo en unos minutos.");
+    state.step -= 1;
+    input.disabled = false;
+    return;
+  }
+
   const text = `Hola Gabriel, soy ${state.lead.name}. SÍ CONFIRMO MI CITA y acepto la consulta espiritual de $100 MXN. Tema: ${state.lead.topic}. Modalidad: ${state.lead.modality}. Horario preferido: ${state.lead.availability}. Mi WhatsApp: ${state.lead.phone}. Código: ${state.sessionId.slice(0, 8)}. Entiendo que el horario queda pendiente hasta comprobar disponibilidad real.`;
   addMessage("Tu solicitud seria está preparada. La cita queda pendiente hasta que se compruebe disponibilidad y Gabriel confirme fecha y hora por WhatsApp.");
   const link = document.createElement("a");

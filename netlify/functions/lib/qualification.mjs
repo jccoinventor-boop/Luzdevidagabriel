@@ -1,4 +1,4 @@
-const RISK_PATTERN = /\b(suicid|matarme|hacerme daño|hacer daño|violencia|amenaza|emergencia|secuestro|desaparecid[oa]|arma)\b/i;
+const RISK_PATTERN = /\b(suicid(?:io|a|arme|arte|arse|arnos|ando)?|quitar(?:me|te|se|nos)?\s+la\s+vida|acabar\s+con\s+mi\s+vida|no\s+quiero\s+vivir|quiero\s+morir|matarme|hacerme\s+daño|hacer\s+daño|violencia|amenaza|emergencia|secuestro|desaparecid[oa]|arma)\b/i;
 const YES_PATTERN = /^(sí|si|acepto|de acuerdo|estoy de acuerdo|confirmo)([,!. ]|$)/i;
 const NO_PATTERN = /^(no|todavía no|aún no|no acepto|no estoy seguro|lo voy a pensar)([,!. ]|$)/i;
 const FINAL_CONFIRMATION_PATTERN = /^s[ií]\s+confirmo\s+mi\s+cita([,!. ]|$)/i;

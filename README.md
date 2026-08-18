@@ -68,6 +68,7 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - `sql/20260818_add_followup_indexes.sql`: índices de seguimiento recomendados por Supabase.
 - `sql/20260818_improve_whatsapp_claim_status.sql`: recuperación segura de mensajes y respuestas en curso.
 - `sql/20260818_activate_calendar_booking.sql`: bloqueo y confirmación idempotente de citas entre WhatsApp, Supabase y Google Calendar.
+- `sql/20260818_prevent_calendar_overlap.sql`: barrera atómica contra reservas concurrentes que se solapan.
 - `AVATAR-GABRIEL.md`: identidad reutilizable del presentador en HeyGen.
 
 ## Desarrollo

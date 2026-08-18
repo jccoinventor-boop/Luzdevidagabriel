@@ -50,7 +50,8 @@ Variables privadas de Calendar necesarias en Netlify:
 
 El calendario secundario debe compartirse con `GOOGLE_SERVICE_ACCOUNT_EMAIL` con
 permiso para modificar eventos. `GOOGLE_CALENDAR_ID` nunca debe apuntar a
-`primary` ni al calendario personal.
+`primary` ni al calendario personal. El adaptador sólo se activa para un ID de
+calendario secundario terminado en `@group.calendar.google.com`.
 
 Hasta conectar un calendario real, el asistente sólo recopila el horario preferido y lo deja como `qualified_pending_slot`; nunca afirma que la cita está confirmada.
 

@@ -68,6 +68,17 @@ test("una solicitud de reagendar una cita confirmada requiere revisión humana",
   assert.equal(turn.qualified, true);
 });
 
+test("una cita confirmada conserva su calificación en mensajes posteriores", () => {
+  const turn = nextTurn({
+    state: "confirmed",
+    lead: { name: "Ana", bookingConfirmedIntent: true }
+  }, "Gracias");
+
+  assert.equal(turn.state, "confirmed");
+  assert.equal(turn.qualified, true);
+  assert.equal(turn.handoff, undefined);
+});
+
 test("extrae mensajes de texto del webhook de Meta", () => {
   const payload = { entry: [{ changes: [{ value: { messages: [{ from: "521234567890", id: "wamid.1", text: { body: "Hola" } }] } }] }] };
   assert.deepEqual(incomingMessages(payload), [{ from: "521234567890", id: "wamid.1", text: "Hola" }]);

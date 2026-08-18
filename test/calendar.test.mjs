@@ -69,6 +69,28 @@ test("mantiene la cita pendiente si Google Calendar no está configurado", async
   }
 });
 
+test("rechaza el calendario principal aunque existan credenciales", () => {
+  const keys = [
+    "GOOGLE_CALENDAR_ID",
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
+  ];
+  const originals = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  Object.assign(process.env, {
+    GOOGLE_CALENDAR_ID: "primary",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "test-only"
+  });
+  try {
+    assert.equal(calendarConfiguration().configured, false);
+  } finally {
+    for (const [key, value] of Object.entries(originals)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("confirma sólo después de disponibilidad, bloqueo, evento y commit", async () => {
   const originalFetch = globalThis.fetch;
   const envKeys = [
@@ -81,7 +103,7 @@ test("confirma sólo después de disponibilidad, bloqueo, evento y commit", asyn
   const originals = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
   const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
   Object.assign(process.env, {
-    GOOGLE_CALENDAR_ID: "gabriel-calendar@example.com",
+    GOOGLE_CALENDAR_ID: "gabriel-calendar@group.calendar.google.com",
     GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example.iam.gserviceaccount.com",
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }),
     SUPABASE_URL: "https://example.supabase.co",
@@ -97,7 +119,7 @@ test("confirma sólo después de disponibilidad, bloqueo, evento y commit", asyn
     }
     if (value.endsWith("/freeBusy")) {
       return new Response(JSON.stringify({
-        calendars: { "gabriel-calendar@example.com": { busy: [] } }
+        calendars: { "gabriel-calendar@group.calendar.google.com": { busy: [] } }
       }), { status: 200 });
     }
     if (value.endsWith("/rpc/gabriel_hold_appointment")) {

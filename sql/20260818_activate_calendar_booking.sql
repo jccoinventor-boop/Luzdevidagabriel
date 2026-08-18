@@ -7,6 +7,27 @@ create unique index if not exists gabriel_appointments_booking_message_idx
   on public.gabriel_appointments(booking_message_id)
   where booking_message_id is not null;
 
+-- La consulta freeBusy de Google no es una operación de bloqueo. Esta
+-- restricción hace que Postgres sea la última barrera atómica contra dos
+-- reservas concurrentes para el mismo intervalo.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'gabriel_appointments_no_overlap'
+      and conrelid = 'public.gabriel_appointments'::regclass
+  ) then
+    alter table public.gabriel_appointments
+      add constraint gabriel_appointments_no_overlap
+      exclude using gist (
+        tstzrange(starts_at, ends_at, '[)') with &&
+      )
+      where (status in ('hold', 'confirmed'));
+  end if;
+end;
+$$;
+
 create or replace function public.gabriel_hold_appointment(
   p_session_id text,
   p_booking_message_id text,

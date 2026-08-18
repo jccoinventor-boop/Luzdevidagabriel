@@ -94,7 +94,7 @@ export function nextTurn(session = {}, rawText = "") {
   }
 
   if (state === "qualified_pending_slot") {
-    return same(state, lead, "Tu solicitud ya está registrada y pendiente de comprobar disponibilidad. Gabriel recibirá los datos de la conversación.");
+    return qualifiedReply(state, lead, "Tu solicitud ya está registrada y pendiente de comprobar disponibilidad. Gabriel recibirá los datos de la conversación.");
   }
 
   if (state === "confirmed") {
@@ -107,7 +107,7 @@ export function nextTurn(session = {}, rawText = "") {
         reply: "Recibí tu solicitud de cambio. No cancelaré ni moveré la cita automáticamente; Gabriel la revisará contigo por WhatsApp."
       };
     }
-    return same(state, lead, "Tu cita ya está confirmada. Si necesitas cambiarla, escribe REAGENDAR y Gabriel revisará la solicitud.");
+    return qualifiedReply(state, lead, "Tu cita ya está confirmada. Si necesitas cambiarla, escribe REAGENDAR y Gabriel revisará la solicitud.");
   }
 
   if (state === "not_qualified") {
@@ -120,4 +120,8 @@ export function nextTurn(session = {}, rawText = "") {
 
 function same(state, lead, reply) {
   return { state, lead, reply, qualified: false };
+}
+
+function qualifiedReply(state, lead, reply) {
+  return { state, lead, reply, qualified: true };
 }

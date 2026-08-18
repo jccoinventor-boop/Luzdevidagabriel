@@ -67,11 +67,12 @@ export function calendarConfiguration() {
   const calendarId = process.env.GOOGLE_CALENDAR_ID?.trim();
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+  const isSecondaryCalendar = Boolean(calendarId && /@group\.calendar\.google\.com$/i.test(calendarId));
   return {
     calendarId,
     clientEmail,
     privateKey,
-    configured: Boolean(calendarId && clientEmail && privateKey)
+    configured: Boolean(isSecondaryCalendar && clientEmail && privateKey)
   };
 }
 

@@ -82,6 +82,15 @@ No usar el calendario personal como agenda de clientes.
 
 Calendar es la fuente de verdad para disponibilidad. Supabase es la fuente de verdad para CRM, estado y atribución.
 
+El adaptador del servidor:
+
+- exige fecha y hora inequívocas en formato `DD/MM/AAAA HH:MM`;
+- consulta `freeBusy` del calendario secundario;
+- crea un bloqueo temporal en Supabase;
+- crea el evento con identificador determinista para evitar duplicados;
+- confirma la cita sólo después de guardar el `google_event_id`;
+- conserva el estado pendiente cuando falta configuración o falla un servicio.
+
 ### WhatsApp
 
 Número oficial: `527122466811`.
@@ -156,10 +165,9 @@ Cadencia inicial documentada:
 1. Crear/autorizar el calendario secundario `Luz de Vida Gabriel` y guardar su ID en Supabase/Netlify.
 2. Configurar credenciales privadas de Google Calendar en Netlify.
 3. Confirmar que Meta tiene el webhook de WhatsApp Cloud API validado y las variables privadas cargadas.
-4. Implementar el adaptador de Calendar que comprueba, retiene, confirma y cancela horarios.
-5. Implementar el despachador de recordatorios/seguimientos pendientes.
-6. Configurar llamadas sólo después de elegir proveedor SIP/número y probar transferencia a humano y emergencias.
-7. Validar despliegue Netlify y pruebas de extremo a extremo.
+4. Implementar el despachador de recordatorios/seguimientos pendientes.
+5. Configurar llamadas sólo después de elegir proveedor SIP/número y probar transferencia a humano y emergencias.
+6. Validar despliegue Netlify y pruebas de extremo a extremo.
 
 ## Definición de éxito
 

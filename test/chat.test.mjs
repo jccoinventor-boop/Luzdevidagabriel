@@ -3,6 +3,16 @@ import assert from "node:assert/strict";
 import handler, { replayConversation } from "../netlify/functions/chat.mjs";
 
 const SESSION_ID = "123e4567-e89b-42d3-a456-426614174000";
+const FUTURE_AVAILABILITY = (() => {
+  const target = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(target).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  return parts.day + "/" + parts.month + "/" + parts.year + " 17:00";
+})();
 
 test("chat califica sin OpenAI sólo después de confirmación final", () => {
   const messages = [
@@ -10,7 +20,7 @@ test("chat califica sin OpenAI sólo después de confirmación final", () => {
     "Quiero orientación sobre una situación de pareja",
     "Sí, acepto",
     "Videollamada",
-    "jueves a las 5 pm",
+    FUTURE_AVAILABILITY,
     "SÍ CONFIRMO MI CITA"
   ].map(content => ({ role: "user", content }));
 
@@ -25,7 +35,7 @@ test("chat no califica antes de confirmación final", () => {
     "Quiero orientación sobre una situación de pareja",
     "Sí, acepto",
     "Videollamada",
-    "jueves a las 5 pm"
+    FUTURE_AVAILABILITY
   ].map(content => ({ role: "user", content }));
 
   const turn = replayConversation(messages);
@@ -69,7 +79,7 @@ test("chat registra la calificación sólo después de reproducir todo el flujo"
     "Quiero orientación sobre una situación de pareja",
     "Sí, acepto",
     "Videollamada",
-    "jueves a las 5 pm",
+    FUTURE_AVAILABILITY,
     "SÍ CONFIRMO MI CITA"
   ].map(content => ({ role: "user", content }));
 

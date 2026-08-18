@@ -33,14 +33,26 @@ Activación manual necesaria en Google Calendar:
 3. Guardarlo en `gabriel_business_config.google_calendar_id` y como variable privada `GOOGLE_CALENDAR_ID` en Netlify.
 4. Ejecutar una prueba controlada de disponibilidad, alta, modificación y cancelación antes de aceptar citas automáticas.
 
-El adaptador debe implementar estas operaciones:
+El adaptador del servidor ya implementa:
 
-- `list_available_slots(date_range, modality)`
-- `hold_slot(slot, lead_id)`
-- `confirm_appointment(hold_id)`
-- `cancel_appointment(appointment_id)`
+- lectura de disponibilidad mediante `freeBusy`;
+- bloqueo temporal e idempotente en Supabase;
+- creación idempotente del evento de Google;
+- confirmación conjunta de `google_event_id` y estado `confirmed`;
+- liberación de bloqueos cuando la creación del evento falla antes de completarse.
 
-Hasta conectar un calendario real, el asistente sólo recopila el horario preferido y lo deja como `pending_confirmation`; nunca afirma que la cita está confirmada.
+Variables privadas de Calendar necesarias en Netlify:
+
+- `GOOGLE_CALENDAR_ID`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+- `APPOINTMENT_DURATION_MINUTES` (opcional; el valor predeterminado es 60)
+
+El calendario secundario debe compartirse con `GOOGLE_SERVICE_ACCOUNT_EMAIL` con
+permiso para modificar eventos. `GOOGLE_CALENDAR_ID` nunca debe apuntar a
+`primary` ni al calendario personal.
+
+Hasta conectar un calendario real, el asistente sólo recopila el horario preferido y lo deja como `qualified_pending_slot`; nunca afirma que la cita está confirmada.
 
 Supabase es la fuente operativa de prospectos, estados y atribución; Google
 Calendar es la fuente de disponibilidad. Una reserva se considera confirmada

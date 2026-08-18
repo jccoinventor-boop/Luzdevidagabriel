@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { nextTurn } from "./lib/qualification.mjs";
+import { autoBookQualifiedTurn } from "./lib/calendar.mjs";
 
 const MAX_WEBHOOK_BYTES = 262_144;
 const MAX_MESSAGES_PER_WEBHOOK = 20;
@@ -135,7 +136,7 @@ export async function processMessage(message) {
   try {
     for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
       const session = await loadSession(message.from);
-      const turn = nextTurn(session, message.text);
+      const turn = await autoBookQualifiedTurn(message, nextTurn(session, message.text));
       if (await commitTurn(message, session, turn)) {
         await deliverOutbox(message.id);
         return { processed: true };

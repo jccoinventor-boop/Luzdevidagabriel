@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 import { nextTurn, isExplicitAcceptance, isFinalBookingConfirmation, isRiskMessage } from "../netlify/functions/lib/qualification.mjs";
 import { incomingMessages, loadSession, processMessage } from "../netlify/functions/whatsapp.mjs";
 
+const FUTURE_AVAILABILITY = (() => {
+  const target = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(target).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  return parts.day + "/" + parts.month + "/" + parts.year + " 17:00";
+})();
+
 test("exige aceptación explícita del precio", () => {
   assert.equal(isExplicitAcceptance("Sí, acepto"), true);
   assert.equal(isExplicitAcceptance("tal vez"), false);
@@ -19,7 +30,7 @@ test("después del horario exige confirmación final", () => {
   const turn = nextTurn({
     state: "awaiting_availability",
     lead: { name: "Ana", topic: "Una situación personal importante", priceAccepted: true, modality: "Videollamada" }
-  }, "jueves a las 5 pm");
+  }, FUTURE_AVAILABILITY);
   assert.equal(turn.qualified, false);
   assert.equal(turn.state, "awaiting_final_confirmation");
 });
@@ -29,7 +40,7 @@ test("sólo califica con confirmación final explícita", () => {
   assert.equal(isFinalBookingConfirmation("tal vez"), false);
   const turn = nextTurn({
     state: "awaiting_final_confirmation",
-    lead: { name: "Ana", topic: "Una situación personal importante", priceAccepted: true, modality: "Videollamada", availability: "jueves a las 5 pm" }
+    lead: { name: "Ana", topic: "Una situación personal importante", priceAccepted: true, modality: "Videollamada", availability: FUTURE_AVAILABILITY }
   }, "SÍ CONFIRMO MI CITA");
   assert.equal(turn.qualified, true);
   assert.equal(turn.state, "qualified_pending_slot");
@@ -45,6 +56,16 @@ test("deriva mensajes de riesgo a atención humana", () => {
   const turn = nextTurn({ state: "awaiting_topic", lead: { name: "Ana" } }, "Alguien me amenaza con un arma");
   assert.equal(turn.handoff, true);
   assert.equal(turn.qualified, false);
+});
+
+test("una solicitud de reagendar una cita confirmada requiere revisión humana", () => {
+  const turn = nextTurn({
+    state: "confirmed",
+    lead: { name: "Ana", googleEventId: "gabriel123" }
+  }, "Quiero reagendar");
+  assert.equal(turn.state, "human_handoff");
+  assert.equal(turn.handoff, true);
+  assert.equal(turn.qualified, true);
 });
 
 test("extrae mensajes de texto del webhook de Meta", () => {

@@ -17,7 +17,7 @@ const flow = [
   { key: "topic", ask: "Gracias, {name}. ¿Qué situación deseas revisar brevemente?", validate: v => v.trim().length >= 4 },
   { key: "priceAccepted", ask: "La consulta cuesta $100 MXN. ¿Estás de acuerdo con el precio?", choices: ["Sí, estoy de acuerdo", "Todavía no"], validate: v => /^(sí|si|acepto|de acuerdo|estoy de acuerdo)([,!. ]|$)/i.test(v) },
   { key: "modality", ask: "¿Qué modalidad prefieres?", choices: ["Teléfono", "Videollamada", "Presencial"], validate: v => /teléfono|telefono|video|presencial/i.test(v) },
-  { key: "availability", ask: "¿Qué día y horario te funciona mejor? La disponibilidad real se comprobará antes de confirmar.", validate: v => v.trim().length >= 4 },
+  { key: "availability", ask: "Escribe una fecha y hora futura como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: 22/08/2026 17:00.", validate: v => /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+([01]?\d|2[0-3]):([0-5]\d)$/.test(v.trim()) },
   { key: "phone", ask: "Escribe tu número de WhatsApp a 10 dígitos.", validate: v => v.replace(/\D/g, "").length === 10 },
   { key: "finalConfirmation", ask: "Para marcar tu solicitud como seria, confirma: SÍ CONFIRMO MI CITA. La cita seguirá pendiente hasta comprobar disponibilidad real.", choices: ["SÍ CONFIRMO MI CITA", "Todavía no"], validate: v => /^s[ií]\s+confirmo\s+mi\s+cita([,!. ]|$)/i.test(v) }
 ];

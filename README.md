@@ -54,7 +54,7 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - Supabase: proyecto `Luz de vida Gabriel` con tablas de prospectos, sesiones, citas, configuración, mensajes, seguimiento, campañas y métricas.
 - WhatsApp: webhook, calificación, control de concurrencia e inbox/outbox implementados.
 - Seguridad web: la calificación se vuelve a comprobar en servidor; el navegador sólo puede registrar telemetría de bajo riesgo.
-- Calendar: la arquitectura está definida, pero el calendario secundario y su autorización todavía deben activarse antes de afirmar agenda automática.
+- Calendar: el adaptador de disponibilidad, bloqueo, creación idempotente y confirmación está implementado; permanece en modo seguro pendiente hasta crear y autorizar el calendario secundario y cargar sus credenciales privadas.
 - Llamadas: arquitectura definida, no activa hasta configurar proveedor/número y pruebas reales.
 
 ## Documentación
@@ -67,6 +67,7 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - `sql/20260818_finalize_secure_operations.sql`: cierre de permisos, límites web e inbox/outbox de WhatsApp.
 - `sql/20260818_add_followup_indexes.sql`: índices de seguimiento recomendados por Supabase.
 - `sql/20260818_improve_whatsapp_claim_status.sql`: recuperación segura de mensajes y respuestas en curso.
+- `sql/20260818_activate_calendar_booking.sql`: bloqueo y confirmación idempotente de citas entre WhatsApp, Supabase y Google Calendar.
 - `AVATAR-GABRIEL.md`: identidad reutilizable del presentador en HeyGen.
 
 ## Desarrollo

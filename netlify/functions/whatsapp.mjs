@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
 import { nextTurn } from "./lib/qualification.mjs";
+import { autoBookQualifiedTurn } from "./lib/calendar.mjs";
+
+const MAX_WEBHOOK_BYTES = 262_144;
+const MAX_MESSAGES_PER_WEBHOOK = 20;
+const MAX_COMMIT_ATTEMPTS = 3;
 
 const json = (status, body) => new Response(JSON.stringify(body), {
   status,
@@ -20,8 +25,11 @@ function incomingMessages(payload) {
   for (const entry of payload.entry || []) {
     for (const change of entry.changes || []) {
       for (const message of change.value?.messages || []) {
-        const text = message.text?.body || message.button?.text || message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;
-        if (message.from && message.id && text) results.push({ from: message.from, id: message.id, text });
+        const rawText = message.text?.body || message.button?.text || message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;
+        const text = typeof rawText === "string" ? rawText.trim().slice(0, 1000) : "";
+        if (message.from && message.id && text) {
+          results.push({ from: String(message.from).slice(0, 15), id: String(message.id).slice(0, 250), text });
+        }
       }
     }
   }
@@ -38,44 +46,49 @@ async function supabase(path, options = {}) {
   });
 }
 
+async function rpc(name, parameters) {
+  const response = await supabase(`rpc/${name}`, {
+    method: "POST",
+    body: JSON.stringify(parameters)
+  });
+  if (!response.ok) throw new Error(`${name}_failed`);
+  return response.json();
+}
+
 export async function loadSession(phone) {
-  const response = await supabase(`gabriel_whatsapp_sessions?phone=eq.${encodeURIComponent(phone)}&select=state,lead,last_message_id&limit=1`);
+  const response = await supabase(`gabriel_whatsapp_sessions?phone=eq.${encodeURIComponent(phone)}&select=state,lead,last_message_id,version&limit=1`);
   if (!response.ok) throw new Error("session_read_failed");
   const rows = await response.json();
-  return rows[0] || {};
+  return rows[0] || { version: 0 };
 }
 
-async function saveSession(phone, turn, messageId) {
-  const response = await supabase("gabriel_whatsapp_sessions?on_conflict=phone", {
-    method: "POST",
-    headers: { prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ phone, state: turn.state, lead: turn.lead, last_message_id: messageId, qualified: turn.qualified, handoff: Boolean(turn.handoff), last_reply: turn.reply, updated_at: new Date().toISOString() })
+async function claimMessage(message) {
+  return rpc("gabriel_claim_whatsapp_message", {
+    p_message_id: message.id,
+    p_phone: message.from,
+    p_message_text: message.text
   });
-  if (!response.ok) throw new Error("session_write_failed");
 }
 
-async function registerEvent(phone, messageId, turn) {
-  const response = await supabase("gabriel_lead_events?on_conflict=provider_message_id", {
-    method: "POST",
-    headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
-    body: JSON.stringify({
-      event: turn.handoff ? "human_handoff" : turn.qualified ? "qualified_lead" : "whatsapp_turn",
-      session_id: phone,
-      provider_message_id: messageId,
-      name: turn.lead.name,
-      topic: turn.lead.topic,
-      price_accepted: turn.lead.priceAccepted === true ? "Sí, acepto" : null,
-      modality: turn.lead.modality,
-      availability: turn.lead.availability,
-      phone,
-      status: turn.state,
-      source: "whatsapp",
-      final_confirmation: turn.lead.finalConfirmation || null,
-      booking_confirmed_intent: turn.lead.bookingConfirmedIntent === true,
-      received_at: new Date().toISOString()
-    })
+async function commitTurn(message, session, turn) {
+  return rpc("gabriel_commit_whatsapp_turn", {
+    p_message_id: message.id,
+    p_phone: message.from,
+    p_expected_version: Number(session.version || 0),
+    p_state: turn.state,
+    p_lead: turn.lead,
+    p_qualified: Boolean(turn.qualified),
+    p_handoff: Boolean(turn.handoff),
+    p_reply: turn.reply,
+    p_event: turn.handoff ? "human_handoff" : turn.qualified ? "qualified_lead" : "whatsapp_turn"
   });
-  if (!response.ok) throw new Error("event_write_failed");
+}
+
+async function markInboxFailed(messageId, error) {
+  return rpc("gabriel_mark_whatsapp_inbox_failed", {
+    p_message_id: messageId,
+    p_error: String(error?.message || error || "processing_failed").slice(0, 500)
+  }).catch(() => false);
 }
 
 async function sendText(to, body) {
@@ -86,9 +99,54 @@ async function sendText(to, body) {
   const response = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { preview_url: false, body } })
+    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { preview_url: false, body: body.slice(0, 4096) } })
   });
   if (!response.ok) throw new Error("whatsapp_send_failed");
+}
+
+async function deliverOutbox(messageId) {
+  const rows = await rpc("gabriel_claim_whatsapp_outbox", { p_message_id: messageId });
+  const item = Array.isArray(rows) ? rows[0] : null;
+  if (!item) return false;
+
+  try {
+    await sendText(item.phone, item.body);
+    await rpc("gabriel_mark_whatsapp_outbox_sent", { p_message_id: messageId });
+    return true;
+  } catch (error) {
+    await rpc("gabriel_mark_whatsapp_outbox_failed", {
+      p_message_id: messageId,
+      p_error: String(error?.message || error || "send_failed").slice(0, 500)
+    }).catch(() => false);
+    throw error;
+  }
+}
+
+export async function processMessage(message) {
+  const claimStatus = await claimMessage(message);
+  if (claimStatus === "complete" || claimStatus === "rate_limited") {
+    return { duplicate: claimStatus === "complete", rateLimited: claimStatus === "rate_limited" };
+  }
+  if (claimStatus === "outbox_ready") {
+    await deliverOutbox(message.id);
+    return { delivered: true };
+  }
+  if (claimStatus !== "claimed") throw new Error(`message_${claimStatus}`);
+
+  try {
+    for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
+      const session = await loadSession(message.from);
+      const turn = await autoBookQualifiedTurn(message, nextTurn(session, message.text));
+      if (await commitTurn(message, session, turn)) {
+        await deliverOutbox(message.id);
+        return { processed: true };
+      }
+    }
+    throw new Error("session_conflict");
+  } catch (error) {
+    await markInboxFailed(message.id, error);
+    throw error;
+  }
 }
 
 export { incomingMessages, validSignature };
@@ -101,18 +159,30 @@ export default async (request) => {
   }
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  const raw = await request.text();
-  if (!validSignature(raw, request.headers.get("x-hub-signature-256"))) return json(401, { error: "invalid_signature" });
-  let payload;
-  try { payload = JSON.parse(raw); } catch { return json(400, { error: "invalid_json" }); }
-
-  for (const message of incomingMessages(payload)) {
-    const session = await loadSession(message.from);
-    if (session.last_message_id === message.id) continue;
-    const turn = nextTurn(session, message.text);
-    await saveSession(message.from, turn, message.id);
-    await registerEvent(message.from, message.id, turn);
-    await sendText(message.from, turn.reply);
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BYTES) {
+    return json(413, { error: "payload_too_large" });
   }
-  return json(200, { received: true });
+
+  const raw = await request.text();
+  if (Buffer.byteLength(raw, "utf8") > MAX_WEBHOOK_BYTES) return json(413, { error: "payload_too_large" });
+  if (!validSignature(raw, request.headers.get("x-hub-signature-256"))) return json(401, { error: "invalid_signature" });
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return json(400, { error: "invalid_json" });
+  }
+
+  let failed = false;
+  for (const message of incomingMessages(payload).slice(0, MAX_MESSAGES_PER_WEBHOOK)) {
+    try {
+      await processMessage(message);
+    } catch {
+      failed = true;
+    }
+  }
+
+  return failed ? json(500, { error: "processing_failed" }) : json(200, { received: true });
 };

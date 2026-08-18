@@ -1,4 +1,6 @@
-const RISK_PATTERN = /\b(suicid|matarme|hacerme daño|hacer daño|violencia|amenaza|emergencia|secuestro|desaparecid[oa]|arma)\b/i;
+import { parseAppointmentWindow } from "./calendar.mjs";
+
+const RISK_PATTERN = /\b(suicid(?:io|a|arme|arte|arse|arnos|ando)?|quitar(?:me|te|se|nos)?\s+la\s+vida|acabar\s+con\s+mi\s+vida|no\s+quiero\s+vivir|quiero\s+morir|matarme|hacerme\s+daño|hacer\s+daño|violencia|amenaza|emergencia|secuestro|desaparecid[oa]|arma)\b/i;
 const YES_PATTERN = /^(sí|si|acepto|de acuerdo|estoy de acuerdo|confirmo)([,!. ]|$)/i;
 const NO_PATTERN = /^(no|todavía no|aún no|no acepto|no estoy seguro|lo voy a pensar)([,!. ]|$)/i;
 const FINAL_CONFIRMATION_PATTERN = /^s[ií]\s+confirmo\s+mi\s+cita([,!. ]|$)/i;
@@ -61,11 +63,11 @@ export function nextTurn(session = {}, rawText = "") {
     const modality = /video/i.test(text) ? "Videollamada" : /presencial/i.test(text) ? "Presencial" : /tel[eé]fono|llamada/i.test(text) ? "Teléfono" : null;
     if (!modality) return same(state, lead, "Elige una modalidad: teléfono, videollamada o presencial.");
     lead.modality = modality;
-    return same("awaiting_availability", lead, "Indica el día y horario que prefieres. Revisaré la disponibilidad antes de confirmar.");
+    return same("awaiting_availability", lead, "Indica fecha y hora como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: 22/08/2026 17:00.");
   }
 
   if (state === "awaiting_availability") {
-    if (text.length < 5) return same(state, lead, "Indica un día y una hora aproximada, por ejemplo: “jueves a las 5 pm”.");
+    if (!parseAppointmentWindow(text)) return same(state, lead, "Necesito una fecha futura válida como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: 22/08/2026 17:00.");
     lead.availability = text.slice(0, 200);
     return same(
       "awaiting_final_confirmation",
@@ -92,7 +94,20 @@ export function nextTurn(session = {}, rawText = "") {
   }
 
   if (state === "qualified_pending_slot") {
-    return same(state, lead, "Tu solicitud ya está registrada y pendiente de comprobar disponibilidad. Gabriel recibirá los datos de la conversación.");
+    return qualifiedReply(state, lead, "Tu solicitud ya está registrada y pendiente de comprobar disponibilidad. Gabriel recibirá los datos de la conversación.");
+  }
+
+  if (state === "confirmed") {
+    if (/reagendar|cancelar|cambiar/i.test(text)) {
+      return {
+        state: "human_handoff",
+        lead,
+        qualified: true,
+        handoff: true,
+        reply: "Recibí tu solicitud de cambio. No cancelaré ni moveré la cita automáticamente; Gabriel la revisará contigo por WhatsApp."
+      };
+    }
+    return qualifiedReply(state, lead, "Tu cita ya está confirmada. Si necesitas cambiarla, escribe REAGENDAR y Gabriel revisará la solicitud.");
   }
 
   if (state === "not_qualified") {
@@ -105,4 +120,8 @@ export function nextTurn(session = {}, rawText = "") {
 
 function same(state, lead, reply) {
   return { state, lead, reply, qualified: false };
+}
+
+function qualifiedReply(state, lead, reply) {
+  return { state, lead, reply, qualified: true };
 }

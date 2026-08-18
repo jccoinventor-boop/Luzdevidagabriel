@@ -3,7 +3,13 @@ const state = {
   step: 0,
   lead: {},
   sessionId: crypto.randomUUID(),
-  attribution: Object.fromEntries(new URLSearchParams(location.search))
+  attribution: Object.fromEntries(
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "fbclid"]
+      .flatMap(key => {
+        const value = new URLSearchParams(location.search).get(key)?.trim().slice(0, 120);
+        return value ? [[key, value]] : [];
+      })
+  )
 };
 
 const flow = [
@@ -11,7 +17,7 @@ const flow = [
   { key: "topic", ask: "Gracias, {name}. ¿Qué situación deseas revisar brevemente?", validate: v => v.trim().length >= 4 },
   { key: "priceAccepted", ask: "La consulta cuesta $100 MXN. ¿Estás de acuerdo con el precio?", choices: ["Sí, estoy de acuerdo", "Todavía no"], validate: v => /^(sí|si|acepto|de acuerdo|estoy de acuerdo)([,!. ]|$)/i.test(v) },
   { key: "modality", ask: "¿Qué modalidad prefieres?", choices: ["Teléfono", "Videollamada", "Presencial"], validate: v => /teléfono|telefono|video|presencial/i.test(v) },
-  { key: "availability", ask: "¿Qué día y horario te funciona mejor? La disponibilidad real se comprobará antes de confirmar.", validate: v => v.trim().length >= 4 },
+  { key: "availability", ask: "Escribe una fecha y hora futura como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: 22/08/2026 17:00.", validate: v => /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+([01]?\d|2[0-3]):([0-5]\d)$/.test(v.trim()) },
   { key: "phone", ask: "Escribe tu número de WhatsApp a 10 dígitos.", validate: v => v.replace(/\D/g, "").length === 10 },
   { key: "finalConfirmation", ask: "Para marcar tu solicitud como seria, confirma: SÍ CONFIRMO MI CITA. La cita seguirá pendiente hasta comprobar disponibilidad real.", choices: ["SÍ CONFIRMO MI CITA", "Todavía no"], validate: v => /^s[ií]\s+confirmo\s+mi\s+cita([,!. ]|$)/i.test(v) }
 ];
@@ -71,8 +77,38 @@ async function answer(value) {
   quick.replaceChildren();
   if (state.step < flow.length) return setTimeout(ask, 250);
 
-  const qualified = { ...state.lead, bookingConfirmedIntent: true, sessionId: state.sessionId, attribution: state.attribution, status: "qualified_pending_slot" };
-  await fetch("/api/lead", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: "qualified_lead", ...qualified }) }).catch(() => {});
+  const validationMessages = [
+    state.lead.name,
+    state.lead.topic,
+    "Sí, acepto",
+    state.lead.modality,
+    state.lead.availability,
+    state.lead.finalConfirmation
+  ].map(content => ({ role: "user", content }));
+  let validation;
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        messages: validationMessages,
+        phone: state.lead.phone,
+        attribution: state.attribution
+      })
+    });
+    validation = response.ok ? await response.json() : null;
+  } catch {
+    validation = null;
+  }
+
+  if (!validation?.qualified) {
+    addMessage("No pude registrar la solicitud de forma segura. Intenta enviarla de nuevo en unos minutos.");
+    state.step -= 1;
+    input.disabled = false;
+    return;
+  }
+
   const text = `Hola Gabriel, soy ${state.lead.name}. SÍ CONFIRMO MI CITA y acepto la consulta espiritual de $100 MXN. Tema: ${state.lead.topic}. Modalidad: ${state.lead.modality}. Horario preferido: ${state.lead.availability}. Mi WhatsApp: ${state.lead.phone}. Código: ${state.sessionId.slice(0, 8)}. Entiendo que el horario queda pendiente hasta comprobar disponibilidad real.`;
   addMessage("Tu solicitud seria está preparada. La cita queda pendiente hasta que se compruebe disponibilidad y Gabriel confirme fecha y hora por WhatsApp.");
   const link = document.createElement("a");

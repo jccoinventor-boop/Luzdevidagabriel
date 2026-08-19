@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs && node --check netlify/functions/whatsapp.mjs && node --check netlify/functions/lib/calendar.mjs && node --check netlify/functions/lib/qualification.mjs && node --check netlify/functions/lib/request-security.mjs",
+    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs && node --check netlify/functions/whatsapp.mjs && node --check netlify/functions/lib/calendar.mjs && node --check netlify/functions/lib/qualification.mjs && node --check netlify/functions/lib/request-security.mjs && node --check api/lead.mjs && node --check api/chat.mjs && node --check api/whatsapp.mjs",
     "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@vercel/oidc": "3.8.4",
+    "google-auth-library": "11.0.2"
   },
   "engines": {
     "node": ">=20"

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { nextTurn } from "./lib/qualification.mjs";
 import { autoBookQualifiedTurn } from "./lib/calendar.mjs";
+import { RequestInputError, readLimitedBody } from "./lib/request-security.mjs";
 
 const MAX_WEBHOOK_BYTES = 262_144;
 const MAX_MESSAGES_PER_WEBHOOK = 20;
@@ -159,18 +160,21 @@ export default async (request) => {
   }
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  const declaredLength = Number(request.headers.get("content-length") || 0);
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BYTES) {
-    return json(413, { error: "payload_too_large" });
-  }
+  const signature = request.headers.get("x-hub-signature-256");
+  if (!/^sha256=[0-9a-f]{64}$/i.test(signature || "")) return json(401, { error: "invalid_signature" });
 
-  const raw = await request.text();
-  if (Buffer.byteLength(raw, "utf8") > MAX_WEBHOOK_BYTES) return json(413, { error: "payload_too_large" });
-  if (!validSignature(raw, request.headers.get("x-hub-signature-256"))) return json(401, { error: "invalid_signature" });
+  let raw;
+  try {
+    raw = await readLimitedBody(request, MAX_WEBHOOK_BYTES);
+  } catch (error) {
+    if (error instanceof RequestInputError) return json(error.status, { error: error.code });
+    return json(400, { error: "invalid_body" });
+  }
+  if (!validSignature(raw, signature)) return json(401, { error: "invalid_signature" });
 
   let payload;
   try {
-    payload = JSON.parse(raw);
+    payload = JSON.parse(raw.toString("utf8"));
   } catch {
     return json(400, { error: "invalid_json" });
   }

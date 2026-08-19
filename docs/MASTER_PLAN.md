@@ -36,7 +36,7 @@ Aceptar $100 no basta. Una persona sólo es un prospecto calificado cuando compl
 
 ## Arquitectura
 
-### Web / Netlify
+### Web / Netlify o Vercel
 
 - Landing estática de conversión.
 - Chat determinista gratuito.
@@ -162,8 +162,8 @@ Cadencia inicial documentada:
 
 ## Lo que todavía requiere activación externa
 
-1. Crear/autorizar el calendario secundario `Luz de Vida Gabriel` y guardar su ID en Supabase/Netlify.
-2. Configurar credenciales privadas de Google Calendar en Netlify.
+1. Autorizar el calendario secundario `Luz de Vida Gabriel` y guardar su ID en Supabase y el hosting.
+2. Configurar Vercel OIDC y Google Cloud Workload Identity Federation sin generar una llave privada.
 3. Confirmar que Meta tiene el webhook de WhatsApp Cloud API validado y las variables privadas cargadas.
 4. Implementar el despachador de recordatorios/seguimientos pendientes.
 5. Configurar llamadas sólo después de elegir proveedor SIP/número y probar transferencia a humano y emergencias.

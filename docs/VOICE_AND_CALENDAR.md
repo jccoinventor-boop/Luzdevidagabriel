@@ -24,13 +24,13 @@ Documentación oficial:
 
 El calendario operativo debe ser uno secundario y separado llamado
 `Luz de Vida Gabriel`. No se deben crear citas en el calendario personal.
-Su identificador se configura en Netlify como `GOOGLE_CALENDAR_ID`.
+Su identificador se configura en el hosting como `GOOGLE_CALENDAR_ID`.
 
 Activación manual necesaria en Google Calendar:
 
 1. Crear el calendario secundario `Luz de Vida Gabriel` con zona horaria `America/Mexico_City`.
 2. Copiar su identificador desde **Configuración e integración**.
-3. Guardarlo en `gabriel_business_config.google_calendar_id` y como variable privada `GOOGLE_CALENDAR_ID` en Netlify.
+3. Guardarlo en `gabriel_business_config.google_calendar_id` y como variable `GOOGLE_CALENDAR_ID` del hosting.
 4. Ejecutar una prueba controlada de disponibilidad, alta, modificación y cancelación antes de aceptar citas automáticas.
 
 El adaptador del servidor ya implementa:
@@ -41,15 +41,19 @@ El adaptador del servidor ya implementa:
 - confirmación conjunta de `google_event_id` y estado `confirmed`;
 - liberación de bloqueos cuando la creación del evento falla antes de completarse.
 
-Variables privadas de Calendar necesarias en Netlify:
+Identificadores necesarios para Vercel OIDC y Google Cloud Workload Identity Federation:
 
 - `GOOGLE_CALENDAR_ID`
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
-- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+- `GCP_PROJECT_ID`
+- `GCP_PROJECT_NUMBER`
+- `GCP_SERVICE_ACCOUNT_EMAIL`
+- `GCP_WORKLOAD_IDENTITY_POOL_ID`
+- `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID`
 - `APPOINTMENT_DURATION_MINUTES` (opcional; el valor predeterminado es 60)
 
-El calendario secundario debe compartirse con `GOOGLE_SERVICE_ACCOUNT_EMAIL` con
-permiso para modificar eventos. `GOOGLE_CALENDAR_ID` nunca debe apuntar a
+El calendario secundario debe compartirse con `GCP_SERVICE_ACCOUNT_EMAIL` con
+permiso para modificar eventos. No se crea ni almacena una llave privada del
+service account. `GOOGLE_CALENDAR_ID` nunca debe apuntar a
 `primary` ni al calendario personal. El adaptador sólo se activa para un ID de
 calendario secundario terminado en `@group.calendar.google.com`.
 
@@ -101,5 +105,5 @@ migraciones fechadas de `sql/` en orden. En producción ya están aplicadas hast
 `20260818_improve_whatsapp_claim_status.sql`.
 
 Agregar `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` sólo como variables privadas
-de Netlify. La clave de servicio nunca debe aparecer en `public/`, en el
+del hosting. La clave de servicio nunca debe aparecer en `public/`, en el
 navegador, en GitHub ni en mensajes.

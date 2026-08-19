@@ -1,17 +1,14 @@
 import crypto from "node:crypto";
+import { getVercelOidcToken } from "@vercel/oidc";
+import { ExternalAccountClient } from "google-auth-library";
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const BUSINESS_TIMEZONE = "America/Mexico_City";
 const MIN_NOTICE_MS = 15 * 60 * 1000;
 const MAX_ADVANCE_MS = 180 * 24 * 60 * 60 * 1000;
 
-let cachedToken = null;
-
-function base64url(value) {
-  return Buffer.from(value).toString("base64url");
-}
+let cachedAuth = null;
 
 function timezoneParts(date, timezone) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -65,52 +62,65 @@ export function parseAppointmentWindow(value, now = new Date(), timezone = BUSIN
 
 export function calendarConfiguration() {
   const calendarId = process.env.GOOGLE_CALENDAR_ID?.trim();
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+  const projectId = process.env.GCP_PROJECT_ID?.trim();
+  const projectNumber = process.env.GCP_PROJECT_NUMBER?.trim();
+  const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL?.trim();
+  const poolId = process.env.GCP_WORKLOAD_IDENTITY_POOL_ID?.trim();
+  const providerId = process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID?.trim();
   const isSecondaryCalendar = Boolean(calendarId && /@group\.calendar\.google\.com$/i.test(calendarId));
   return {
     calendarId,
-    clientEmail,
-    privateKey,
-    configured: Boolean(isSecondaryCalendar && clientEmail && privateKey)
+    projectId,
+    projectNumber,
+    serviceAccountEmail,
+    poolId,
+    providerId,
+    authMode: "workload_identity_federation",
+    configured: Boolean(
+      process.env.VERCEL === "1" &&
+      isSecondaryCalendar &&
+      projectId &&
+      projectNumber &&
+      serviceAccountEmail &&
+      poolId &&
+      providerId
+    )
   };
 }
 
-async function accessToken() {
+export function externalAccountConfiguration(config, subjectTokenSupplier = () => getVercelOidcToken({ audience: config.audience })) {
+  return {
+    type: "external_account",
+    audience: config.audience,
+    subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
+    token_url: "https://sts.googleapis.com/v1/token",
+    service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${config.serviceAccountEmail}:generateAccessToken`,
+    subject_token_supplier: { getSubjectToken: subjectTokenSupplier }
+  };
+}
+
+function workloadIdentityClient() {
   const config = calendarConfiguration();
   if (!config.configured) throw new Error("calendar_not_configured");
-  if (cachedToken?.email === config.clientEmail && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
+  const audience = `https://iam.googleapis.com/projects/${config.projectNumber}/locations/global/workloadIdentityPools/${config.poolId}/providers/${config.providerId}`;
+  const cacheKey = `${audience}:${config.serviceAccountEmail}`;
+  if (cachedAuth?.key === cacheKey) return cachedAuth.client;
 
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64url(JSON.stringify({
-    iss: config.clientEmail,
-    scope: CALENDAR_SCOPE,
-    aud: TOKEN_URL,
-    iat: nowSeconds - 30,
-    exp: nowSeconds + 3600
+  const client = ExternalAccountClient.fromJSON(externalAccountConfiguration({
+    audience,
+    serviceAccountEmail: config.serviceAccountEmail
   }));
-  const unsigned = `${header}.${claims}`;
-  const signature = crypto.sign("RSA-SHA256", Buffer.from(unsigned), config.privateKey).toString("base64url");
-  const assertion = `${unsigned}.${signature}`;
+  if (!client) throw new Error("calendar_identity_client_failed");
+  client.scopes = [CALENDAR_SCOPE];
+  cachedAuth = { key: cacheKey, client };
+  return client;
+}
 
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion
-    })
-  });
-  if (!response.ok) throw new Error(`calendar_token_failed_${response.status}`);
-  const payload = await response.json();
-  if (!payload.access_token) throw new Error("calendar_token_missing");
-  cachedToken = {
-    email: config.clientEmail,
-    value: payload.access_token,
-    expiresAt: Date.now() + Math.max(300, Number(payload.expires_in || 3600)) * 1000
-  };
-  return cachedToken.value;
+async function accessToken() {
+  const response = await workloadIdentityClient().getAccessToken();
+  const token = typeof response === "string" ? response : response?.token;
+  if (!token) throw new Error("calendar_token_missing");
+  return token;
 }
 
 async function googleRequest(path, options = {}) {

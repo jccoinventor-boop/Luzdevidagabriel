@@ -54,7 +54,7 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - Supabase: proyecto `Luz de vida Gabriel` con tablas de prospectos, sesiones, citas, configuración, mensajes, seguimiento, campañas y métricas.
 - WhatsApp: webhook, calificación, control de concurrencia e inbox/outbox implementados.
 - Seguridad web: la calificación se vuelve a comprobar en servidor; el navegador sólo puede registrar telemetría de bajo riesgo.
-- Calendar: el adaptador de disponibilidad, bloqueo, creación idempotente y confirmación está implementado; permanece en modo seguro pendiente hasta crear y autorizar el calendario secundario y cargar sus credenciales privadas.
+- Calendar: el adaptador de disponibilidad, bloqueo, creación idempotente y confirmación está implementado; permanece en modo seguro pendiente hasta autorizar Google Cloud Workload Identity Federation y completar sus identificadores no secretos.
 - Llamadas: arquitectura definida, no activa hasta configurar proveedor/número y pruebas reales.
 
 ## Documentación
@@ -69,6 +69,7 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - `sql/20260818_improve_whatsapp_claim_status.sql`: recuperación segura de mensajes y respuestas en curso.
 - `sql/20260818_activate_calendar_booking.sql`: bloqueo y confirmación idempotente de citas entre WhatsApp, Supabase y Google Calendar.
 - `sql/20260818_prevent_calendar_overlap.sql`: barrera atómica contra reservas concurrentes que se solapan.
+- `sql/20260819_remove_duplicate_calendar_overlap.sql`: elimina de forma idempotente la restricción GiST duplicada sin reducir la protección contra solapamientos.
 - `AVATAR-GABRIEL.md`: identidad reutilizable del presentador en HeyGen.
 
 ## Desarrollo
@@ -81,4 +82,4 @@ npm run build
 
 ## Despliegue
 
-Netlify usa `netlify.toml`. Todas las credenciales se cargan como variables privadas del sitio. Nunca subir tokens, secretos, service-role keys ni refresh tokens al repositorio.
+Netlify usa `netlify.toml` y Vercel usa `vercel.json`. El despliegue de Vercel obtiene Google Calendar mediante OIDC y Workload Identity Federation, sin llave privada exportable. Los demás secretos se cargan como variables privadas del proyecto. Nunca subir tokens, service-role keys ni credenciales al repositorio.

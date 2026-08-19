@@ -1,11 +1,29 @@
-import crypto from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { BaseExternalAccountClient } from "google-auth-library";
 import {
   autoBookQualifiedTurn,
   calendarConfiguration,
+  externalAccountConfiguration,
   parseAppointmentWindow
 } from "../netlify/functions/lib/calendar.mjs";
+
+const CALENDAR_ENV_KEYS = [
+  "VERCEL",
+  "GOOGLE_CALENDAR_ID",
+  "GCP_PROJECT_ID",
+  "GCP_PROJECT_NUMBER",
+  "GCP_SERVICE_ACCOUNT_EMAIL",
+  "GCP_WORKLOAD_IDENTITY_POOL_ID",
+  "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID"
+];
+
+function restoreEnvironment(originals) {
+  for (const [key, value] of Object.entries(originals)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
 
 function futureAvailability(days = 7) {
   const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -47,13 +65,8 @@ test("interpreta una fecha de Ciudad de México sin ambigüedad", () => {
 });
 
 test("mantiene la cita pendiente si Google Calendar no está configurado", async () => {
-  const keys = [
-    "GOOGLE_CALENDAR_ID",
-    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
-    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
-  ];
-  const originals = Object.fromEntries(keys.map(key => [key, process.env[key]]));
-  keys.forEach(key => delete process.env[key]);
+  const originals = Object.fromEntries(CALENDAR_ENV_KEYS.map(key => [key, process.env[key]]));
+  CALENDAR_ENV_KEYS.forEach(key => delete process.env[key]);
   try {
     assert.equal(calendarConfiguration().configured, false);
     const turn = qualifiedTurn();
@@ -62,61 +75,68 @@ test("mantiene la cita pendiente si Google Calendar no está configurado", async
     assert.equal(result.qualified, true);
     assert.equal(result.reply, turn.reply);
   } finally {
-    for (const [key, value] of Object.entries(originals)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
+    restoreEnvironment(originals);
   }
 });
 
 test("rechaza el calendario principal aunque existan credenciales", () => {
-  const keys = [
-    "GOOGLE_CALENDAR_ID",
-    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
-    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
-  ];
-  const originals = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const originals = Object.fromEntries(CALENDAR_ENV_KEYS.map(key => [key, process.env[key]]));
   Object.assign(process.env, {
+    VERCEL: "1",
     GOOGLE_CALENDAR_ID: "primary",
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example.iam.gserviceaccount.com",
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "test-only"
+    GCP_PROJECT_ID: "example-project",
+    GCP_PROJECT_NUMBER: "123456789",
+    GCP_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example-project.iam.gserviceaccount.com",
+    GCP_WORKLOAD_IDENTITY_POOL_ID: "vercel",
+    GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: "luz-de-vida-gabriel"
   });
   try {
     assert.equal(calendarConfiguration().configured, false);
   } finally {
-    for (const [key, value] of Object.entries(originals)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
+    restoreEnvironment(originals);
   }
+});
+
+test("construye una identidad externa limitada a Google y al proveedor configurado", () => {
+  const supplier = async () => "oidc-token";
+  const options = externalAccountConfiguration({
+    audience: "https://iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/vercel/providers/luz-de-vida-gabriel",
+    serviceAccountEmail: "calendar-agent@example-project.iam.gserviceaccount.com"
+  }, supplier);
+  assert.equal(options.token_url, "https://sts.googleapis.com/v1/token");
+  assert.equal(
+    options.service_account_impersonation_url,
+    "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/calendar-agent@example-project.iam.gserviceaccount.com:generateAccessToken"
+  );
+  assert.equal(options.subject_token_supplier.getSubjectToken, supplier);
 });
 
 test("confirma sólo después de disponibilidad, bloqueo, evento y commit", async () => {
   const originalFetch = globalThis.fetch;
+  const originalGetAccessToken = BaseExternalAccountClient.prototype.getAccessToken;
   const envKeys = [
-    "GOOGLE_CALENDAR_ID",
-    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
-    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    ...CALENDAR_ENV_KEYS,
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY"
   ];
   const originals = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
-  const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
   Object.assign(process.env, {
+    VERCEL: "1",
     GOOGLE_CALENDAR_ID: "gabriel-calendar@group.calendar.google.com",
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example.iam.gserviceaccount.com",
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }),
+    GCP_PROJECT_ID: "example-project",
+    GCP_PROJECT_NUMBER: "123456789",
+    GCP_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example-project.iam.gserviceaccount.com",
+    GCP_WORKLOAD_IDENTITY_POOL_ID: "vercel",
+    GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: "luz-de-vida-gabriel",
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test-only"
   });
+  BaseExternalAccountClient.prototype.getAccessToken = async () => ({ token: "google-token" });
 
   const calls = [];
   globalThis.fetch = async (url, options = {}) => {
     const value = String(url);
     calls.push(value);
-    if (value === "https://oauth2.googleapis.com/token") {
-      return new Response(JSON.stringify({ access_token: "google-token", expires_in: 3600 }), { status: 200 });
-    }
     if (value.endsWith("/freeBusy")) {
       return new Response(JSON.stringify({
         calendars: { "gabriel-calendar@group.calendar.google.com": { busy: [] } }
@@ -156,9 +176,7 @@ test("confirma sólo después de disponibilidad, bloqueo, evento y commit", asyn
     assert.equal(calls.filter(value => value.endsWith("/rpc/gabriel_confirm_appointment")).length, 1);
   } finally {
     globalThis.fetch = originalFetch;
-    for (const [key, value] of Object.entries(originals)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
+    BaseExternalAccountClient.prototype.getAccessToken = originalGetAccessToken;
+    restoreEnvironment(originals);
   }
 });

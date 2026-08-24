@@ -54,7 +54,7 @@ Una cita sólo debe considerarse **confirmada** cuando:
 - Supabase: proyecto `Luz de vida Gabriel` con tablas de prospectos, sesiones, citas, configuración, mensajes, seguimiento, campañas y métricas.
 - WhatsApp: webhook, calificación, control de concurrencia e inbox/outbox implementados.
 - Seguridad web: la calificación se vuelve a comprobar en servidor; el navegador sólo puede registrar telemetría de bajo riesgo.
-- Calendar: el adaptador de disponibilidad, bloqueo, creación idempotente y confirmación está implementado; permanece en modo seguro pendiente hasta autorizar Google Cloud Workload Identity Federation y completar sus identificadores no secretos.
+- Calendar: el adaptador de disponibilidad, bloqueo, creación idempotente y confirmación está implementado. Vercel usa Workload Identity Federation; Netlify usa una cuenta de servicio limitada al calendario secundario y conserva la llave únicamente como variable secreta del servidor.
 - Llamadas: arquitectura definida, no activa hasta configurar proveedor/número y pruebas reales.
 
 ## Documentación
@@ -82,4 +82,4 @@ npm run build
 
 ## Despliegue
 
-Netlify usa `netlify.toml` y Vercel usa `vercel.json`. El despliegue de Vercel obtiene Google Calendar mediante OIDC y Workload Identity Federation, sin llave privada exportable. Los demás secretos se cargan como variables privadas del proyecto. Nunca subir tokens, service-role keys ni credenciales al repositorio.
+Netlify usa `netlify.toml` y Vercel usa `vercel.json`. Vercel obtiene Google Calendar mediante OIDC y Workload Identity Federation, sin llave privada exportable. Netlify requiere `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, ambas limitadas al calendario secundario y guardadas como variables privadas. Nunca subir tokens, service-role keys ni credenciales al repositorio.

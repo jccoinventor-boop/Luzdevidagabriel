@@ -1,4 +1,6 @@
 const WA = "527122466811";
+const PUBLIC_API = "https://bakcrmthmbbdnqmktfhy.supabase.co/functions/v1/gabriel-public-api";
+const PUBLIC_API_KEY = "sb_publishable_91uUIn4MaVGlMscsRS9d-Q_7KzMF7SQ";
 const state = {
   step: 0,
   lead: {},
@@ -54,8 +56,8 @@ function ask() {
 }
 
 function track(event, extra = {}) {
-  const payload = JSON.stringify({ event, sessionId: state.sessionId, at: new Date().toISOString(), attribution: state.attribution, ...extra });
-  navigator.sendBeacon?.("/api/lead", new Blob([payload], { type: "application/json" })) || fetch("/api/lead", { method: "POST", headers: { "content-type": "application/json" }, body: payload, keepalive: true }).catch(() => {});
+  const payload = JSON.stringify({ action: "lead", event, sessionId: state.sessionId, attribution: state.attribution, ...extra });
+  fetch(PUBLIC_API, { method: "POST", headers: { apikey: PUBLIC_API_KEY, "content-type": "application/json" }, body: payload, keepalive: true }).catch(() => {});
 }
 
 async function answer(value) {
@@ -87,10 +89,11 @@ async function answer(value) {
   ].map(content => ({ role: "user", content }));
   let validation;
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch(PUBLIC_API, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { apikey: PUBLIC_API_KEY, "content-type": "application/json" },
       body: JSON.stringify({
+        action: "chat",
         sessionId: state.sessionId,
         messages: validationMessages,
         phone: state.lead.phone,

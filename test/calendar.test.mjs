@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BaseExternalAccountClient } from "google-auth-library";
+import { BaseExternalAccountClient, JWT } from "google-auth-library";
 import {
   autoBookQualifiedTurn,
   calendarConfiguration,
@@ -10,12 +10,15 @@ import {
 
 const CALENDAR_ENV_KEYS = [
   "VERCEL",
+  "NETLIFY",
   "GOOGLE_CALENDAR_ID",
   "GCP_PROJECT_ID",
   "GCP_PROJECT_NUMBER",
   "GCP_SERVICE_ACCOUNT_EMAIL",
   "GCP_WORKLOAD_IDENTITY_POOL_ID",
-  "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID"
+  "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID",
+  "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+  "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
 ];
 
 function restoreEnvironment(originals) {
@@ -91,6 +94,29 @@ test("rechaza el calendario principal aunque existan credenciales", () => {
     GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: "luz-de-vida-gabriel"
   });
   try {
+    assert.equal(calendarConfiguration().configured, false);
+  } finally {
+    restoreEnvironment(originals);
+  }
+});
+
+test("activa Calendar en Netlify sólo con una cuenta de servicio completa", () => {
+  const originals = Object.fromEntries(CALENDAR_ENV_KEYS.map(key => [key, process.env[key]]));
+  CALENDAR_ENV_KEYS.forEach(key => delete process.env[key]);
+  Object.assign(process.env, {
+    NETLIFY: "true",
+    GOOGLE_CALENDAR_ID: "gabriel-calendar@group.calendar.google.com",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example-project.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "test-only-private-key"
+  });
+  try {
+    const config = calendarConfiguration();
+    assert.equal(config.configured, true);
+    assert.equal(config.authMode, "service_account");
+    assert.equal(config.serviceAccountEmail, "calendar-agent@example-project.iam.gserviceaccount.com");
+    assert.equal("privateKey" in config, false);
+
+    delete process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
     assert.equal(calendarConfiguration().configured, false);
   } finally {
     restoreEnvironment(originals);
@@ -177,6 +203,67 @@ test("confirma sólo después de disponibilidad, bloqueo, evento y commit", asyn
   } finally {
     globalThis.fetch = originalFetch;
     BaseExternalAccountClient.prototype.getAccessToken = originalGetAccessToken;
+    restoreEnvironment(originals);
+  }
+});
+
+test("Netlify confirma usando una cuenta de servicio sin exponer la llave", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalGetAccessToken = JWT.prototype.getAccessToken;
+  const envKeys = [
+    ...CALENDAR_ENV_KEYS,
+    "NETLIFY",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY"
+  ];
+  const originals = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+  CALENDAR_ENV_KEYS.forEach(key => delete process.env[key]);
+  Object.assign(process.env, {
+    NETLIFY: "true",
+    GOOGLE_CALENDAR_ID: "gabriel-calendar@group.calendar.google.com",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example-project.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "test-only-private-key",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only"
+  });
+  JWT.prototype.getAccessToken = async () => ({ token: "google-token" });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const value = String(url);
+    if (value.endsWith("/freeBusy")) {
+      assert.equal(options.headers.authorization, "Bearer google-token");
+      return new Response(JSON.stringify({
+        calendars: { "gabriel-calendar@group.calendar.google.com": { busy: [] } }
+      }), { status: 200 });
+    }
+    if (value.endsWith("/rpc/gabriel_hold_appointment")) {
+      return new Response(JSON.stringify([{
+        appointment_id: "123e4567-e89b-42d3-a456-426614174001",
+        appointment_status: "hold",
+        google_event_id: null,
+        result: "held"
+      }]), { status: 200 });
+    }
+    if (value.includes("/events?sendUpdates=none")) {
+      const body = JSON.parse(options.body);
+      return new Response(JSON.stringify({ id: body.id }), { status: 200 });
+    }
+    if (value.endsWith("/rpc/gabriel_confirm_appointment")) {
+      return new Response("true", { status: 200 });
+    }
+    throw new Error("unexpected_fetch:" + value);
+  };
+
+  try {
+    const result = await autoBookQualifiedTurn(
+      { from: "527122466811", id: "wamid.netlify-confirmed" },
+      qualifiedTurn()
+    );
+    assert.equal(result.state, "confirmed");
+    assert.ok(result.lead.googleEventId);
+  } finally {
+    globalThis.fetch = originalFetch;
+    JWT.prototype.getAccessToken = originalGetAccessToken;
     restoreEnvironment(originals);
   }
 });

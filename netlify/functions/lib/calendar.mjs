@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { getVercelOidcToken } from "@vercel/oidc";
-import { ExternalAccountClient } from "google-auth-library";
+import { ExternalAccountClient, JWT } from "google-auth-library";
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -9,6 +9,11 @@ const MIN_NOTICE_MS = 15 * 60 * 1000;
 const MAX_ADVANCE_MS = 180 * 24 * 60 * 60 * 1000;
 
 let cachedAuth = null;
+
+function environmentValue(key) {
+  const netlifyValue = globalThis.Netlify?.env?.get?.(key);
+  return netlifyValue === undefined ? process.env[key] : netlifyValue;
+}
 
 function timezoneParts(date, timezone) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -53,7 +58,7 @@ export function parseAppointmentWindow(value, now = new Date(), timezone = BUSIN
   const start = zonedLocalToUtc(parts, timezone);
   if (!start || start.getTime() < now.getTime() + MIN_NOTICE_MS || start.getTime() > now.getTime() + MAX_ADVANCE_MS) return null;
 
-  const configuredDuration = Number(process.env.APPOINTMENT_DURATION_MINUTES || 60);
+  const configuredDuration = Number(environmentValue("APPOINTMENT_DURATION_MINUTES") || 60);
   const durationMinutes = Number.isInteger(configuredDuration) && configuredDuration >= 15 && configuredDuration <= 240
     ? configuredDuration
     : 60;
@@ -61,30 +66,42 @@ export function parseAppointmentWindow(value, now = new Date(), timezone = BUSIN
 }
 
 export function calendarConfiguration() {
-  const calendarId = process.env.GOOGLE_CALENDAR_ID?.trim();
-  const projectId = process.env.GCP_PROJECT_ID?.trim();
-  const projectNumber = process.env.GCP_PROJECT_NUMBER?.trim();
-  const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL?.trim();
-  const poolId = process.env.GCP_WORKLOAD_IDENTITY_POOL_ID?.trim();
-  const providerId = process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID?.trim();
+  const calendarId = environmentValue("GOOGLE_CALENDAR_ID")?.trim();
+  const projectId = environmentValue("GCP_PROJECT_ID")?.trim();
+  const projectNumber = environmentValue("GCP_PROJECT_NUMBER")?.trim();
+  const workloadServiceAccountEmail = environmentValue("GCP_SERVICE_ACCOUNT_EMAIL")?.trim();
+  const poolId = environmentValue("GCP_WORKLOAD_IDENTITY_POOL_ID")?.trim();
+  const providerId = environmentValue("GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID")?.trim();
+  const netlifyServiceAccountEmail = environmentValue("GOOGLE_SERVICE_ACCOUNT_EMAIL")?.trim();
+  const hasNetlifyPrivateKey = Boolean(environmentValue("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY")?.trim());
   const isSecondaryCalendar = Boolean(calendarId && /@group\.calendar\.google\.com$/i.test(calendarId));
+  const workloadIdentityConfigured = Boolean(
+    environmentValue("VERCEL") === "1" &&
+    projectId &&
+    projectNumber &&
+    workloadServiceAccountEmail &&
+    poolId &&
+    providerId
+  );
+  const serviceAccountConfigured = Boolean(
+    environmentValue("NETLIFY") === "true" &&
+    netlifyServiceAccountEmail &&
+    hasNetlifyPrivateKey
+  );
+  const authMode = workloadIdentityConfigured
+    ? "workload_identity_federation"
+    : serviceAccountConfigured
+      ? "service_account"
+      : "unconfigured";
   return {
     calendarId,
     projectId,
     projectNumber,
-    serviceAccountEmail,
+    serviceAccountEmail: workloadIdentityConfigured ? workloadServiceAccountEmail : netlifyServiceAccountEmail,
     poolId,
     providerId,
-    authMode: "workload_identity_federation",
-    configured: Boolean(
-      process.env.VERCEL === "1" &&
-      isSecondaryCalendar &&
-      projectId &&
-      projectNumber &&
-      serviceAccountEmail &&
-      poolId &&
-      providerId
-    )
+    authMode,
+    configured: Boolean(isSecondaryCalendar && authMode !== "unconfigured")
   };
 }
 
@@ -101,7 +118,9 @@ export function externalAccountConfiguration(config, subjectTokenSupplier = () =
 
 function workloadIdentityClient() {
   const config = calendarConfiguration();
-  if (!config.configured) throw new Error("calendar_not_configured");
+  if (!config.configured || config.authMode !== "workload_identity_federation") {
+    throw new Error("calendar_not_configured");
+  }
   const audience = `https://iam.googleapis.com/projects/${config.projectNumber}/locations/global/workloadIdentityPools/${config.poolId}/providers/${config.providerId}`;
   const cacheKey = `${audience}:${config.serviceAccountEmail}`;
   if (cachedAuth?.key === cacheKey) return cachedAuth.client;
@@ -116,8 +135,31 @@ function workloadIdentityClient() {
   return client;
 }
 
+function serviceAccountClient() {
+  const config = calendarConfiguration();
+  if (!config.configured || config.authMode !== "service_account") {
+    throw new Error("calendar_not_configured");
+  }
+  const privateKey = environmentValue("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY")?.replace(/\\n/g, "\n").trim();
+  if (!privateKey) throw new Error("calendar_not_configured");
+
+  const cacheKey = `service-account:${config.serviceAccountEmail}`;
+  if (cachedAuth?.key === cacheKey) return cachedAuth.client;
+  const client = new JWT({
+    email: config.serviceAccountEmail,
+    key: privateKey,
+    scopes: [CALENDAR_SCOPE]
+  });
+  cachedAuth = { key: cacheKey, client };
+  return client;
+}
+
 async function accessToken() {
-  const response = await workloadIdentityClient().getAccessToken();
+  const config = calendarConfiguration();
+  const client = config.authMode === "workload_identity_federation"
+    ? workloadIdentityClient()
+    : serviceAccountClient();
+  const response = await client.getAccessToken();
   const token = typeof response === "string" ? response : response?.token;
   if (!token) throw new Error("calendar_token_missing");
   return token;
@@ -154,8 +196,8 @@ async function calendarIsFree(window) {
 }
 
 async function rpc(name, parameters) {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = environmentValue("SUPABASE_URL");
+  const key = environmentValue("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) throw new Error("supabase_not_configured");
   const response = await fetch(`${url}/rest/v1/rpc/${name}`, {
     method: "POST",

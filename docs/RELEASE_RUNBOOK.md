@@ -102,6 +102,19 @@ No crear una cita real durante un smoke test. La cita integrada se prueba en sta
 6. Confirmar que el sitio, WhatsApp manual y el registro de prospectos funcionan en modo degradado.
 7. Documentar causa, impacto, versión y prueba que evitará la repetición.
 
+### Evidencia del ensayo de staging
+
+El 2026-08-31 se completó una reversión de aplicación con datos sintéticos:
+
+1. se creó una cita en estado `hold` y se recuperó por teléfono más código;
+2. se creó un evento privado en el calendario secundario y la cita cambió a `confirmed`;
+3. se repitió la confirmación sin crear una segunda relación;
+4. se eliminó el evento, se quitó `google_event_id` y tanto la cita como la sesión volvieron a estado pendiente;
+5. se creó un evento nuevo y se recuperaron cita y sesión a `confirmed`;
+6. se eliminaron los eventos y registros sintéticos, y se verificaron cero rastros y el horario libre.
+
+Este ensayo no sustituye una restauración de respaldo ni una reversión de versiones de Netlify y Supabase Edge Functions. Tampoco demuestra la entrega por WhatsApp Cloud API; esos puntos permanecen bloqueados.
+
 ## Ruta degradada
 
 Si Calendar o WhatsApp Cloud fallan, el sistema nunca debe prometer una cita confirmada. Debe conservar la solicitud como pendiente y dirigirla a revisión humana de Gabriel.

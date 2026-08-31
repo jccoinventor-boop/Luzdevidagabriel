@@ -8,7 +8,7 @@ Evaluación actualizada el 2026-08-31 para la rama `codex/production-readiness`.
 | --- | --- | --- |
 | Desarrollo local | GO | Pruebas, sintaxis y build automatizados. |
 | Deploy Preview restringido | GO | Artefacto de Netlify, commit publicado, CSP y conexión exclusiva al backend de staging verificados. Usar sólo datos sintéticos. |
-| Piloto real controlado | BLOQUEADO | El flujo sintético llegó a Calendar y superó rollback/recuperación, pero falta la entrega real por WhatsApp Cloud API, validar la identidad de servicio desplegada y revisar jurídicamente el aviso. |
+| Piloto real controlado | BLOQUEADO | Falta revisar jurídicamente el aviso, aplicar las migraciones nuevas y ejecutar una prueba real web → WhatsApp → Calendar. |
 | Campaña o lanzamiento general | BLOQUEADO | No existe evidencia de consultas completadas y pagadas ni operación sostenida. |
 
 ## Evidencia confirmada
@@ -25,20 +25,17 @@ Evaluación actualizada el 2026-08-31 para la rama `codex/production-readiness`.
 - El proyecto aislado `Luz de vida Gabriel Staging` contiene únicamente datos sintéticos, todas las migraciones versionadas y la función Edge de esta rama.
 - En staging se comprobó rechazo sin clave, registro de consentimiento, apartado de horario, rechazo de duplicado y recuperación del mismo apartado por teléfono más código.
 - La prueba de staging encontró y corrigió una referencia SQL ambigua antes de que esa migración llegara a producción.
-- El 2026-08-31 se ejecutó un recorrido sintético sin datos de clientes: apartado web, recuperación por código y teléfono, inbox durable de WhatsApp, evento privado en el calendario secundario real, confirmación en Supabase y reintento idempotente. Existió un solo registro con el identificador de Calendar.
-- En el mismo ensayo se eliminó el evento, se devolvieron la cita y la sesión al estado pendiente, se creó un segundo evento, se recuperó el estado confirmado y se comprobó nuevamente la relación uno a uno.
-- Al terminar se borraron ambos eventos de prueba y los seis tipos de registros sintéticos creados (cita, inbox, outbox, evento de lead, sesión y límite de solicitud). Las verificaciones finales devolvieron cero rastros del ensayo y el horario volvió a quedar libre.
 - El Deploy Preview de Netlify publica la revisión esperada, conserva `Cache-Control: no-store` en `/release.json` y su navegador apunta al proyecto aislado, no al Supabase productivo.
 - Las funciones auxiliares del Deploy Preview reciben la URL de staging; no se guarda ninguna clave administrativa en Git y fallan cerradas mientras no exista una credencial de servidor exclusiva de staging.
 
 ## Bloqueadores reales
 
 1. Falta una revisión jurídica independiente del aviso de privacidad antes del lanzamiento general.
-2. Las migraciones `20260831_record_web_privacy_consent.sql` y `20260830_connect_web_booking_to_whatsapp.sql` ya fueron probadas en staging, pero aún no se han respaldado ni aprobado para producción.
+2. Las migraciones `20260831_record_web_privacy_consent.sql` y `20260830_connect_web_booking_to_whatsapp.sql` aún no se han aplicado a producción.
 3. La función Edge corregida sólo está desplegada en staging y ningún artefacto integrado ha sido aprobado para producción.
-4. Falta completar el recorrido por el número de prueba de Meta. El ensayo validó la lógica durable de WhatsApp y un evento real de Calendar, pero no atravesó el webhook oficial, el envío por Graph API ni las credenciales de cuenta de servicio de la función desplegada.
-5. El rollback y la recuperación de cita, sesión y evento ya se ensayaron en staging. Falta restaurar una copia de base de datos y revertir coordinadamente una versión de Netlify y de la función Edge.
-6. No existe evidencia de un mensaje procesado por WhatsApp Cloud API ni de una cita de cliente confirmada; todos los datos y eventos de este ensayo fueron sintéticos y se eliminaron.
+4. Falta completar el recorrido por el número de prueba de Meta y un calendario de prueba de Google; la interfaz y la API web aisladas ya fueron validadas.
+5. No se ha ensayado restauración de base de datos ni rollback coordinado de Netlify y la función Edge.
+6. No existe evidencia de mensajes reales procesados por WhatsApp Cloud API ni de una cita real confirmada en Google Calendar.
 
 ## Criterio de aceptación del piloto
 

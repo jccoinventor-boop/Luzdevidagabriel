@@ -85,6 +85,8 @@ Reglas operativas:
 - Aceptar el precio no basta: exige nombre, motivo, modalidad y horario.
 - Un mensaje de riesgo se deriva a revisión humana y nunca se agenda.
 - Sin calendario real, el estado final es `qualified_pending_slot`, no confirmado.
+- Un apartado originado en la web sólo se recupera cuando coinciden código y teléfono dentro del webhook firmado.
+- Una conversación nueva de WhatsApp muestra primero el aviso de privacidad y no interpreta el mensaje inicial como nombre hasta recibir “Sí, acepto”.
 
 Variables privadas necesarias:
 
@@ -101,9 +103,12 @@ mensajes de chat.
 ## Supabase
 
 Para un proyecto nuevo, ejecutar primero `sql/supabase.sql` y después las
-migraciones fechadas de `sql/` en orden. En producción ya están aplicadas hasta
-`20260818_improve_whatsapp_claim_status.sql`.
+migraciones fechadas de `sql/` en orden. La base productiva observada tiene
+registradas las migraciones hasta `20260826_add_free_web_booking.sql`. Las dos
+migraciones del 30 y 31 de agosto continúan pendientes hasta completar staging y el
+procedimiento de `docs/RELEASE_RUNBOOK.md`.
 
-Agregar `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` sólo como variables privadas
-del hosting. La clave de servicio nunca debe aparecer en `public/`, en el
+Agregar `SUPABASE_URL` y preferentemente `SUPABASE_SECRET_KEYS` sólo como variables
+privadas del hosting. `SUPABASE_SERVICE_ROLE_KEY` se admite únicamente durante la
+transición heredada. Ninguna clave secreta debe aparecer en `public/`, en el
 navegador, en GitHub ni en mensajes.

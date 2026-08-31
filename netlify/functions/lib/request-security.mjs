@@ -39,6 +39,19 @@ export function normalizeAttribution(value) {
   );
 }
 
+function rateLimitSalt() {
+  if (process.env.RATE_LIMIT_SALT) return process.env.RATE_LIMIT_SALT;
+  if (process.env.SUPABASE_SECRET_KEYS) {
+    try {
+      const key = JSON.parse(process.env.SUPABASE_SECRET_KEYS).default;
+      if (typeof key === "string" && key) return key;
+    } catch {
+      // Se conserva compatibilidad con la variable heredada.
+    }
+  }
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || "luz-de-vida-gabriel";
+}
+
 export function clientKey(request) {
   let address = "unknown";
   if (process.env.VERCEL === "1") {
@@ -46,7 +59,7 @@ export function clientKey(request) {
   } else if (process.env.NETLIFY === "true") {
     address = request.headers.get("x-nf-client-connection-ip")?.trim() || address;
   }
-  const salt = process.env.RATE_LIMIT_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || "luz-de-vida-gabriel";
+  const salt = rateLimitSalt();
   return crypto.createHash("sha256").update(`${salt}:${address.slice(0, 120)}`).digest("hex");
 }
 

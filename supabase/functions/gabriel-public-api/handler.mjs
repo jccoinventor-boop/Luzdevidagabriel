@@ -10,11 +10,14 @@ const MAX_BODY_BYTES = 16_384;
 const BUSINESS_TIMEZONE = "America/Mexico_City";
 const MIN_NOTICE_MS = 15 * 60 * 1000;
 const MAX_ADVANCE_MS = 180 * 24 * 60 * 60 * 1000;
+const APPOINTMENT_DURATION_MS = 60 * 60 * 1000;
+const PRIVACY_NOTICE_VERSION = "2026-08-31";
 const localWindows = new Map();
 
 const allowedOrigin = origin => !origin
   || origin === "https://luzdevidagabriel.netlify.app"
   || origin === "https://main--luzdevidagabriel.netlify.app"
+  || origin === "https://bakcrmthmbbdnqmktfhy.supabase.co"
   || /^https:\/\/deploy-preview-\d+--luzdevidagabriel\.netlify\.app$/.test(origin);
 
 const corsHeaders = origin => ({
@@ -89,6 +92,23 @@ function parseAppointmentWindow(value, now = new Date()) {
   }, BUSINESS_TIMEZONE);
   if (!start || start.getTime() < now.getTime() + MIN_NOTICE_MS || start.getTime() > now.getTime() + MAX_ADVANCE_MS) return null;
   return start;
+}
+
+function appointmentWindow(value, now = new Date()) {
+  const start = parseAppointmentWindow(value, now);
+  if (!start) return null;
+  return {
+    start,
+    end: new Date(start.getTime() + APPOINTMENT_DURATION_MS)
+  };
+}
+
+function formatAppointment(date) {
+  return new Intl.DateTimeFormat("es-MX", {
+    timeZone: BUSINESS_TIMEZONE,
+    dateStyle: "full",
+    timeStyle: "short"
+  }).format(date);
 }
 
 const same = (state, lead, reply) => ({ state, lead, reply, qualified: false });
@@ -241,6 +261,7 @@ function locallyRateLimited(key, scope, now = Date.now()) {
 
 function validateChat(body) {
   if (!UUID_PATTERN.test(String(body.sessionId || ""))) throw Object.assign(new Error("invalid_session"), { status: 422 });
+  validatePrivacy(body.privacy);
   if (!Array.isArray(body.messages) || body.messages.length > 12) throw Object.assign(new Error("invalid_messages"), { status: 422 });
   if (body.messages.some(item => !item || item.role !== "user" || typeof item.content !== "string" || item.content.length > 1000)) {
     throw Object.assign(new Error("invalid_message"), { status: 422 });
@@ -249,8 +270,24 @@ function validateChat(body) {
     sessionId: body.sessionId,
     messages: body.messages,
     phone: typeof body.phone === "string" ? body.phone.replace(/\D/g, "") : "",
-    attribution: normalizeAttribution(body.attribution)
+    attribution: normalizeAttribution(body.attribution),
+    privacyNoticeVersion: PRIVACY_NOTICE_VERSION
   };
+}
+
+function validatePrivacy(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || value.accepted !== true
+    || value.noticeVersion !== PRIVACY_NOTICE_VERSION) {
+    throw Object.assign(new Error("privacy_consent_required"), { status: 422 });
+  }
+  return { noticeVersion: PRIVACY_NOTICE_VERSION };
+}
+
+function validateConsent(body) {
+  if (!UUID_PATTERN.test(String(body.sessionId || ""))) throw Object.assign(new Error("invalid_session"), { status: 422 });
+  const privacy = validatePrivacy(body.privacy);
+  return { sessionId: body.sessionId, ...privacy };
 }
 
 function validateLead(body) {
@@ -313,13 +350,36 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
         return json(202, { accepted: true }, origin);
       }
 
+      if (body.action === "consent") {
+        if (locallyRateLimited(hashedClient, "consent")) return json(429, { error: "rate_limited" }, origin);
+        const consent = validateConsent(body);
+        const result = await rpc(fetchFn, url, key, "gabriel_record_web_privacy_consent", {
+          p_client_key: hashedClient,
+          p_session_id: consent.sessionId,
+          p_notice_version: consent.noticeVersion
+        });
+        if (result === "rate_limited") return json(429, { error: "rate_limited" }, origin);
+        if (result === "invalid") return json(422, { error: "invalid_privacy_consent" }, origin);
+        return json(201, { accepted: true, noticeVersion: consent.noticeVersion }, origin);
+      }
+
       if (body.action === "chat") {
         if (locallyRateLimited(hashedClient, "qualified")) return json(429, { error: "rate_limited" }, origin);
         const chat = validateChat(body);
+        const consent = await rpc(fetchFn, url, key, "gabriel_record_web_privacy_consent", {
+          p_client_key: hashedClient,
+          p_session_id: chat.sessionId,
+          p_notice_version: chat.privacyNoticeVersion
+        });
+        if (consent === "rate_limited") return json(429, { error: "rate_limited" }, origin);
+        if (consent === "invalid") return json(422, { error: "invalid_privacy_consent" }, origin);
         const turn = replayConversation(chat.messages);
         let storage = "not_needed";
+        let booking = null;
         if (turn.qualified) {
           if (!/^\d{10}$/.test(chat.phone)) return json(422, { error: "invalid_phone" }, origin);
+          const window = appointmentWindow(turn.lead.availability);
+          if (!window) return json(422, { error: "invalid_appointment_window" }, origin);
           storage = await rpc(fetchFn, url, key, "gabriel_record_qualified_web_lead", {
             p_client_key: hashedClient,
             p_session_id: chat.sessionId,
@@ -332,13 +392,45 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
           });
           if (storage === "rate_limited") return json(429, { error: "rate_limited" }, origin);
           if (storage === "invalid") return json(422, { error: "invalid_payload" }, origin);
+
+          const rows = await rpc(fetchFn, url, key, "gabriel_book_web_appointment", {
+            p_client_key: hashedClient,
+            p_session_id: chat.sessionId,
+            p_customer_name: turn.lead.name,
+            p_customer_phone: chat.phone,
+            p_topic: turn.lead.topic,
+            p_modality: turn.lead.modality,
+            p_starts_at: window.start.toISOString(),
+            p_ends_at: window.end.toISOString(),
+            p_attribution: chat.attribution
+          });
+          const row = Array.isArray(rows) ? rows[0] : null;
+          if (!row || row.result === "invalid") return json(422, { error: "invalid_booking" }, origin);
+          if (row.result === "rate_limited") return json(429, { error: "rate_limited" }, origin);
+          if (row.result === "unavailable") {
+            return json(409, {
+              error: "slot_unavailable",
+              message: "Ese horario ya no está disponible. Elige otra fecha y hora."
+            }, origin);
+          }
+          booking = {
+            id: row.appointment_id,
+            code: String(row.appointment_id || "").slice(0, 8).toUpperCase(),
+            startsAt: row.starts_at || window.start.toISOString(),
+            endsAt: row.ends_at || window.end.toISOString(),
+            status: row.appointment_status || "hold",
+            result: row.result
+          };
         }
         return json(200, {
-          message: turn.reply,
-          state: turn.state,
+          message: booking
+            ? `Tu horario quedó apartado durante 30 minutos para ${formatAppointment(new Date(booking.startsAt))}. Abre WhatsApp ahora para que Gabriel confirme los detalles y la forma de pago.`
+            : turn.reply,
+          state: booking ? "held" : turn.state,
           qualified: Boolean(turn.qualified),
           handoff: Boolean(turn.handoff),
-          stored: storage === "inserted" || storage === "duplicate"
+          stored: storage === "inserted" || storage === "duplicate",
+          booking
         }, origin);
       }
 

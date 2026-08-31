@@ -19,18 +19,20 @@ Convertir tráfico de TikTok, Instagram, Facebook y la landing en consultas real
 
 1. Contenido/anuncio con UTM.
 2. Landing o WhatsApp.
-3. Captura de nombre y motivo.
-4. Aceptación explícita del precio.
-5. Elección de modalidad.
-6. Horario preferido.
-7. Confirmación explícita `SÍ CONFIRMO MI CITA`.
-8. Estado `qualified_pending_slot`.
-9. Consulta de disponibilidad real en Google Calendar.
-10. Creación del evento y registro `confirmed` en Supabase.
-11. Recordatorio.
-12. Consulta.
-13. Registro de pago/asistencia.
-14. Seguimiento y posible reagendamiento.
+3. Aviso de privacidad y consentimiento registrado.
+4. Captura de nombre y motivo.
+5. Aceptación explícita del precio.
+6. Elección de modalidad.
+7. Horario preferido.
+8. Confirmación explícita `SÍ CONFIRMO MI CITA`.
+9. Apartado temporal en Supabase y código de reserva.
+10. Recuperación del mismo apartado desde el webhook firmado de WhatsApp.
+11. Consulta de disponibilidad real en Google Calendar.
+12. Creación del evento y registro `confirmed` en Supabase.
+13. Recordatorio.
+14. Consulta.
+15. Registro de pago/asistencia.
+16. Seguimiento y posible reagendamiento.
 
 Aceptar $100 no basta. Una persona sólo es un prospecto calificado cuando completa el flujo y confirma intención. Una cita sólo es una cita confirmada cuando existe un evento real de Calendar y el registro de Supabase tiene estado `confirmed`.
 
@@ -49,6 +51,7 @@ Aceptar $100 no basta. Una persona sólo es un prospecto calificado cuando compl
 Fuente operativa para:
 
 - eventos de adquisición;
+- consentimiento de privacidad versionado;
 - sesiones de WhatsApp;
 - citas;
 - configuración;
@@ -87,6 +90,7 @@ El adaptador del servidor:
 - exige fecha y hora inequívocas en formato `DD/MM/AAAA HH:MM`;
 - consulta `freeBusy` del calendario secundario;
 - crea un bloqueo temporal en Supabase;
+- recupera el bloqueo web mediante teléfono y código desde WhatsApp;
 - crea el evento con identificador determinista para evitar duplicados;
 - confirma la cita sólo después de guardar el `google_event_id`;
 - conserva el estado pendiente cuando falta configuración o falla un servicio.
@@ -135,6 +139,8 @@ Estados de pago:
 ## Seguridad y límites
 
 - No subir secretos a GitHub.
+- No recopilar datos personales en la web antes de registrar consentimiento.
+- En WhatsApp, mostrar el aviso y obtener aceptación explícita antes de solicitar nombre o motivo; las emergencias se derivan de inmediato.
 - Service role de Supabase sólo en servidor.
 - RLS activo y acceso de cliente revocado en tablas operativas.
 - No prometer resultados espirituales.
@@ -162,12 +168,13 @@ Cadencia inicial documentada:
 
 ## Lo que todavía requiere activación externa
 
-1. Autorizar el calendario secundario `Luz de Vida Gabriel` y guardar su ID en Supabase y el hosting.
-2. Configurar Vercel OIDC y Google Cloud Workload Identity Federation sin generar una llave privada.
-3. Confirmar que Meta tiene el webhook de WhatsApp Cloud API validado y las variables privadas cargadas.
-4. Implementar el despachador de recordatorios/seguimientos pendientes.
-5. Configurar llamadas sólo después de elegir proveedor SIP/número y probar transferencia a humano y emergencias.
-6. Validar despliegue Netlify y pruebas de extremo a extremo.
+1. Obtener revisión jurídica independiente del aviso de privacidad antes del lanzamiento general.
+2. Aplicar las migraciones del 30 y 31 de agosto siguiendo el runbook.
+3. Confirmar mediante staging que las credenciales actuales sólo acceden al calendario secundario.
+4. Confirmar que Meta tiene el webhook de WhatsApp Cloud API validado y las variables privadas cargadas.
+5. Ejecutar una prueba de extremo a extremo sin datos reales.
+6. Implementar el despachador de recordatorios/seguimientos pendientes después de validar el flujo de cita.
+7. Configurar llamadas sólo después de elegir proveedor SIP/número y probar transferencia a humano y emergencias.
 
 ## Definición de éxito
 

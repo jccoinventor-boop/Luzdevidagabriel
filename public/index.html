@@ -36,6 +36,7 @@
           <button class="primary" data-open-chat>Revisar disponibilidad</button>
           <a class="secondary track-whatsapp" href="#" data-wa-source="hero">Escribir por WhatsApp</a>
         </div>
+        <p class="privacy-summary">Antes de pedirte datos, solicitaremos tu autorización. Consulta el <a href="/aviso-de-privacidad.html">aviso de privacidad</a>.</p>
         <p class="micro">Por teléfono, videollamada o presencial en Atlacomulco y alrededores.</p>
       </div>
       <aside class="trust-card" aria-label="Cómo funciona">
@@ -76,7 +77,7 @@
 
   <footer>
     <p>© <span id="year"></span> Luz de Vida Gabriel · Atlacomulco, Estado de México</p>
-    <p><a href="mailto:luzdevidagabriel@gmail.com">luzdevidagabriel@gmail.com</a> · TikTok e Instagram: @luzdevidagabriel</p>
+    <p><a href="/aviso-de-privacidad.html">Aviso de privacidad</a> · <a href="mailto:luzdevidagabriel@gmail.com">luzdevidagabriel@gmail.com</a> · TikTok e Instagram: @luzdevidagabriel</p>
   </footer>
 
   <a class="wa-float track-whatsapp" href="#" data-wa-source="floating" aria-label="Agendar por WhatsApp">WA</a>
@@ -89,8 +90,8 @@
     <div id="messages" class="messages" aria-live="polite"></div>
     <form id="chat-form" class="chat-form">
       <label class="sr-only" for="chat-input">Tu respuesta</label>
-      <input id="chat-input" autocomplete="off" maxlength="300" placeholder="Escribe tu respuesta…" required>
-      <button type="submit">Enviar</button>
+      <input id="chat-input" autocomplete="off" maxlength="300" placeholder="Acepta el aviso para continuar…" required disabled>
+      <button type="submit" disabled>Enviar</button>
     </form>
     <div id="quick-replies" class="quick-replies"></div>
   </dialog>

@@ -1,11 +1,15 @@
 import crypto from "node:crypto";
-import { nextTurn } from "./lib/qualification.mjs";
-import { autoBookQualifiedTurn } from "./lib/calendar.mjs";
+import { INITIAL_STATE, isExplicitAcceptance, isRiskMessage, nextTurn } from "./lib/qualification.mjs";
+import { autoBookQualifiedTurn, confirmWebBooking } from "./lib/calendar.mjs";
 import { RequestInputError, readLimitedBody } from "./lib/request-security.mjs";
 
 const MAX_WEBHOOK_BYTES = 262_144;
 const MAX_MESSAGES_PER_WEBHOOK = 20;
 const MAX_COMMIT_ATTEMPTS = 3;
+const WEB_BOOKING_CODE_PATTERN = /\bc[oó]digo:\s*([0-9a-f]{8})\b/i;
+const PRIVACY_NOTICE_VERSION = "2026-08-31";
+const PRIVACY_NOTICE_URL = "https://luzdevidagabriel.netlify.app/aviso-de-privacidad.html";
+const PRIVACY_DECLINE_PATTERN = /^(no|no acepto|no estoy de acuerdo)([,!. ]|$)/i;
 
 const json = (status, body) => new Response(JSON.stringify(body), {
   status,
@@ -39,11 +43,28 @@ function incomingMessages(payload) {
 
 async function supabase(path, options = {}) {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let key = "";
+  let legacy = false;
+  if (process.env.SUPABASE_SECRET_KEYS) {
+    try {
+      key = JSON.parse(process.env.SUPABASE_SECRET_KEYS).default || "";
+    } catch {
+      // Se usa la clave heredada únicamente durante la transición.
+    }
+  }
+  if (!key) {
+    key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    legacy = Boolean(key);
+  }
   if (!url || !key) throw new Error("supabase_not_configured");
   return fetch(`${url}/rest/v1/${path}`, {
     ...options,
-    headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json", ...(options.headers || {}) }
+    headers: {
+      apikey: key,
+      ...(legacy ? { authorization: `Bearer ${key}` } : {}),
+      "content-type": "application/json",
+      ...(options.headers || {})
+    }
   });
 }
 
@@ -61,6 +82,80 @@ export async function loadSession(phone) {
   if (!response.ok) throw new Error("session_read_failed");
   const rows = await response.json();
   return rows[0] || { version: 0 };
+}
+
+export function extractWebBookingCode(text) {
+  return String(text || "").match(WEB_BOOKING_CODE_PATTERN)?.[1]?.toUpperCase() || null;
+}
+
+function hasCurrentPrivacyConsent(lead = {}) {
+  return lead.privacyNoticeVersion === PRIVACY_NOTICE_VERSION
+    && (Boolean(lead.privacyConsentAt) || lead.privacyConsentSource === "web_recorded");
+}
+
+export function whatsappPrivacyTurn(session = {}, rawText = "", now = new Date()) {
+  const lead = { ...(session.lead || {}) };
+  if (hasCurrentPrivacyConsent(lead) || isRiskMessage(rawText)) return null;
+
+  const state = session.state || INITIAL_STATE;
+  const noticeWasShown = lead.privacyNoticeShown === true
+    && lead.privacyNoticeVersion === PRIVACY_NOTICE_VERSION;
+
+  if (!noticeWasShown) {
+    return {
+      state,
+      lead: {
+        ...lead,
+        privacyNoticeShown: true,
+        privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
+        privacyNoticeShownAt: now.toISOString()
+      },
+      qualified: false,
+      reply: `Antes de pedirte nombre, motivo u horario, lee el aviso de privacidad: ${PRIVACY_NOTICE_URL}\n\nSi autorizas el uso de esos datos para atender y preparar tu cita, responde “Sí, acepto”. Si no, responde “No acepto”.`
+    };
+  }
+
+  if (isExplicitAcceptance(rawText)) {
+    return {
+      state,
+      lead: {
+        ...lead,
+        privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
+        privacyConsentAt: now.toISOString(),
+        privacyConsentSource: "whatsapp_explicit"
+      },
+      qualified: false,
+      reply: state === INITIAL_STATE
+        ? "Gracias. Registré tu autorización. ¿Cómo te llamas?"
+        : "Gracias. Registré tu autorización. Ya podemos continuar; responde nuevamente la pregunta pendiente."
+    };
+  }
+
+  if (PRIVACY_DECLINE_PATTERN.test(String(rawText || "").trim())) {
+    return {
+      state,
+      lead,
+      qualified: false,
+      reply: "De acuerdo. No solicitaré más datos ni prepararé una cita por este asistente. Si cambias de opinión, revisa el aviso y responde “Sí, acepto”."
+    };
+  }
+
+  return {
+    state,
+    lead,
+    qualified: false,
+    reply: `Para continuar necesito una respuesta clara después de leer ${PRIVACY_NOTICE_URL}: “Sí, acepto” o “No acepto”.`
+  };
+}
+
+async function loadWebBooking(message) {
+  const code = extractWebBookingCode(message.text);
+  if (!code) return { code: null, booking: null };
+  const rows = await rpc("gabriel_get_web_booking_for_whatsapp", {
+    p_customer_phone: message.from,
+    p_booking_code: code
+  });
+  return { code, booking: Array.isArray(rows) ? rows[0] || null : null };
 }
 
 async function claimMessage(message) {
@@ -137,7 +232,18 @@ export async function processMessage(message) {
   try {
     for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
       const session = await loadSession(message.from);
-      const turn = await autoBookQualifiedTurn(message, nextTurn(session, message.text));
+      const web = await loadWebBooking(message);
+      const turn = web.booking
+        ? await confirmWebBooking(message, web.booking)
+        : web.code
+          ? {
+              state: session.state || "awaiting_name",
+              lead: session.lead || {},
+              qualified: false,
+              reply: "No encontré un apartado vigente con ese código y este número. Regresa al sitio para elegir otro horario o escribe AGENDAR para comenzar nuevamente."
+            }
+          : whatsappPrivacyTurn(session, message.text)
+            || await autoBookQualifiedTurn(message, nextTurn(session, message.text));
       if (await commitTurn(message, session, turn)) {
         await deliverOutbox(message.id);
         return { processed: true };

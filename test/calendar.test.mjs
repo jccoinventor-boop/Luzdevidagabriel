@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { BaseExternalAccountClient, JWT } from "google-auth-library";
 import {
   autoBookQualifiedTurn,
+  appointmentInputExample,
   calendarConfiguration,
+  confirmWebBooking,
   externalAccountConfiguration,
   parseAppointmentWindow
 } from "../netlify/functions/lib/calendar.mjs";
@@ -65,6 +67,7 @@ test("interpreta una fecha de Ciudad de México sin ambigüedad", () => {
   assert.equal(window.end.toISOString(), "2026-08-23T00:00:00.000Z");
   assert.equal(parseAppointmentWindow("jueves a las 5 pm"), null);
   assert.equal(parseAppointmentWindow("18/08/2026 05:00", new Date("2026-08-18T12:00:00.000Z")), null);
+  assert.equal(appointmentInputExample(new Date("2026-08-31T12:00:00.000Z")), "07/09/2026 17:00");
 });
 
 test("mantiene la cita pendiente si Google Calendar no está configurado", async () => {
@@ -168,6 +171,9 @@ test("confirma sólo después de disponibilidad, bloqueo, evento y commit", asyn
         calendars: { "gabriel-calendar@group.calendar.google.com": { busy: [] } }
       }), { status: 200 });
     }
+    if (/\/events\/gabriel[0-9a-f]+$/.test(value)) {
+      return new Response("", { status: 404 });
+    }
     if (value.endsWith("/rpc/gabriel_hold_appointment")) {
       return new Response(JSON.stringify([{
         appointment_id: "123e4567-e89b-42d3-a456-426614174001",
@@ -236,6 +242,9 @@ test("Netlify confirma usando una cuenta de servicio sin exponer la llave", asyn
         calendars: { "gabriel-calendar@group.calendar.google.com": { busy: [] } }
       }), { status: 200 });
     }
+    if (/\/events\/gabriel[0-9a-f]+$/.test(value)) {
+      return new Response("", { status: 404 });
+    }
     if (value.endsWith("/rpc/gabriel_hold_appointment")) {
       return new Response(JSON.stringify([{
         appointment_id: "123e4567-e89b-42d3-a456-426614174001",
@@ -261,6 +270,119 @@ test("Netlify confirma usando una cuenta de servicio sin exponer la llave", asyn
     );
     assert.equal(result.state, "confirmed");
     assert.ok(result.lead.googleEventId);
+  } finally {
+    globalThis.fetch = originalFetch;
+    JWT.prototype.getAccessToken = originalGetAccessToken;
+    restoreEnvironment(originals);
+  }
+});
+
+test("conecta un apartado web con WhatsApp y confirma el mismo registro en Calendar", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalGetAccessToken = JWT.prototype.getAccessToken;
+  const envKeys = [
+    ...CALENDAR_ENV_KEYS,
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY"
+  ];
+  const originals = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+  CALENDAR_ENV_KEYS.forEach(key => delete process.env[key]);
+  Object.assign(process.env, {
+    NETLIFY: "true",
+    GOOGLE_CALENDAR_ID: "gabriel-calendar@group.calendar.google.com",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example-project.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "test-only-private-key",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only"
+  });
+  JWT.prototype.getAccessToken = async () => ({ token: "google-token" });
+
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const value = String(url);
+    calls.push(value);
+    if (/\/events\/gabriel[0-9a-f]+$/.test(value)) return new Response("", { status: 404 });
+    if (value.endsWith("/freeBusy")) {
+      return new Response(JSON.stringify({
+        calendars: { "gabriel-calendar@group.calendar.google.com": { busy: [] } }
+      }), { status: 200 });
+    }
+    if (value.includes("/events?sendUpdates=none")) {
+      const body = JSON.parse(options.body);
+      return new Response(JSON.stringify({ id: body.id }), { status: 200 });
+    }
+    if (value.endsWith("/rpc/gabriel_confirm_appointment")) return new Response("true", { status: 200 });
+    throw new Error("unexpected_fetch:" + value);
+  };
+
+  try {
+    const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const result = await confirmWebBooking(
+      { from: "527122466811", id: "wamid.web-confirmation" },
+      {
+        appointment_id: "123e4567-e89b-42d3-a456-426614174001",
+        customer_name: "Ana",
+        customer_phone: "7122466811",
+        topic: "Quiero orientación sobre una situación de pareja",
+        modality: "Videollamada",
+        starts_at: startsAt.toISOString(),
+        ends_at: new Date(startsAt.getTime() + 60 * 60 * 1000).toISOString(),
+        appointment_status: "hold",
+        google_event_id: null
+      }
+    );
+    assert.equal(result.state, "confirmed");
+    assert.match(result.reply, /Tu cita quedó confirmada/);
+    assert.equal(calls.some(value => value.endsWith("/rpc/gabriel_hold_appointment")), false);
+    assert.equal(calls.filter(value => value.endsWith("/rpc/gabriel_confirm_appointment")).length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    JWT.prototype.getAccessToken = originalGetAccessToken;
+    restoreEnvironment(originals);
+  }
+});
+
+test("un reintento no libera Supabase cuando el evento de Google ya existe", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalGetAccessToken = JWT.prototype.getAccessToken;
+  const envKeys = [...CALENDAR_ENV_KEYS, "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+  const originals = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+  CALENDAR_ENV_KEYS.forEach(key => delete process.env[key]);
+  Object.assign(process.env, {
+    NETLIFY: "true",
+    GOOGLE_CALENDAR_ID: "gabriel-calendar@group.calendar.google.com",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "calendar-agent@example-project.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "test-only-private-key",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only"
+  });
+  JWT.prototype.getAccessToken = async () => ({ token: "google-token" });
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    calls.push(value);
+    if (/\/events\/gabriel[0-9a-f]+$/.test(value)) {
+      return new Response(JSON.stringify({ id: value.split("/").pop() }), { status: 200 });
+    }
+    if (value.endsWith("/rpc/gabriel_hold_appointment")) {
+      return new Response(JSON.stringify([{
+        appointment_id: "123e4567-e89b-42d3-a456-426614174001",
+        appointment_status: "hold",
+        google_event_id: null,
+        result: "existing"
+      }]), { status: 200 });
+    }
+    if (value.endsWith("/rpc/gabriel_confirm_appointment")) return new Response("false", { status: 200 });
+    throw new Error("unexpected_fetch:" + value);
+  };
+  try {
+    const result = await autoBookQualifiedTurn(
+      { from: "527122466811", id: "wamid.retry-existing-event" },
+      qualifiedTurn()
+    );
+    assert.equal(result.state, "qualified_pending_slot");
+    assert.equal(calls.some(value => value.endsWith("/freeBusy")), false);
+    assert.equal(calls.some(value => value.endsWith("/rpc/gabriel_release_appointment")), false);
   } finally {
     globalThis.fetch = originalFetch;
     JWT.prototype.getAccessToken = originalGetAccessToken;

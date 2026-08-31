@@ -112,8 +112,9 @@ El 2026-08-31 se completó una reversión de aplicación con datos sintéticos:
 4. se eliminó el evento, se quitó `google_event_id` y tanto la cita como la sesión volvieron a estado pendiente;
 5. se creó un evento nuevo y se recuperaron cita y sesión a `confirmed`;
 6. se eliminaron los eventos y registros sintéticos, y se verificaron cero rastros y el horario libre.
+7. el Deploy Preview se revirtió al árbol estable anterior y se recuperó al árbol actual; CI y Netlify aprobaron ambos artefactos.
 
-Este ensayo no sustituye una restauración de respaldo ni una reversión de versiones de Netlify y Supabase Edge Functions. Tampoco demuestra la entrega por WhatsApp Cloud API; esos puntos permanecen bloqueados.
+Este ensayo no sustituye una restauración de respaldo ni una reversión de versión de Supabase Edge Functions. Tampoco demuestra la entrega por WhatsApp Cloud API; esos puntos permanecen bloqueados.
 
 ## Ruta degradada
 

@@ -28,6 +28,7 @@ Evaluación actualizada el 2026-08-31 para la rama `codex/production-readiness`.
 - El 2026-08-31 se ejecutó un recorrido sintético sin datos de clientes: apartado web, recuperación por código y teléfono, inbox durable de WhatsApp, evento privado en el calendario secundario real, confirmación en Supabase y reintento idempotente. Existió un solo registro con el identificador de Calendar.
 - En el mismo ensayo se eliminó el evento, se devolvieron la cita y la sesión al estado pendiente, se creó un segundo evento, se recuperó el estado confirmado y se comprobó nuevamente la relación uno a uno.
 - Al terminar se borraron ambos eventos de prueba y los seis tipos de registros sintéticos creados (cita, inbox, outbox, evento de lead, sesión y límite de solicitud). Las verificaciones finales devolvieron cero rastros del ensayo y el horario volvió a quedar libre.
+- El Deploy Preview se revirtió al árbol estable anterior mediante el commit `cac15a0` y se recuperó al árbol actual mediante `14504bd`; CI, cabeceras, redirecciones y Netlify aprobaron ambos despliegues.
 - El Deploy Preview de Netlify publica la revisión esperada, conserva `Cache-Control: no-store` en `/release.json` y su navegador apunta al proyecto aislado, no al Supabase productivo.
 - Las funciones auxiliares del Deploy Preview reciben la URL de staging; no se guarda ninguna clave administrativa en Git y fallan cerradas mientras no exista una credencial de servidor exclusiva de staging.
 
@@ -37,7 +38,7 @@ Evaluación actualizada el 2026-08-31 para la rama `codex/production-readiness`.
 2. Las migraciones `20260831_record_web_privacy_consent.sql` y `20260830_connect_web_booking_to_whatsapp.sql` ya fueron probadas en staging, pero aún no se han respaldado ni aprobado para producción.
 3. La función Edge corregida sólo está desplegada en staging y ningún artefacto integrado ha sido aprobado para producción.
 4. Falta completar el recorrido por el número de prueba de Meta. El ensayo validó la lógica durable de WhatsApp y un evento real de Calendar, pero no atravesó el webhook oficial, el envío por Graph API ni las credenciales de cuenta de servicio de la función desplegada.
-5. El rollback y la recuperación de cita, sesión y evento ya se ensayaron en staging. Falta restaurar una copia de base de datos y revertir coordinadamente una versión de Netlify y de la función Edge.
+5. El rollback y la recuperación de cita, sesión, evento y Deploy Preview ya se ensayaron fuera de producción. Falta restaurar una copia de base de datos y revertir una versión de la función Edge.
 6. No existe evidencia de un mensaje procesado por WhatsApp Cloud API ni de una cita de cliente confirmada; todos los datos y eventos de este ensayo fueron sintéticos y se eliminaron.
 
 ## Criterio de aceptación del piloto

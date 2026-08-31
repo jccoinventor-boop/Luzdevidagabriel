@@ -29,7 +29,7 @@
       "name": "Operación",
       "status": "fail",
       "critical": true,
-      "evidence": "Se probó rollback y recuperación de la cita, la sesión y el evento fuera de producción. Falta una restauración real de respaldo y una reversión coordinada de Netlify y la función Edge."
+      "evidence": "Se probó rollback y recuperación de cita, sesión, evento y Deploy Preview fuera de producción. Falta una restauración real de respaldo y una reversión de versión de la función Edge."
     },
     {
       "name": "Escala",

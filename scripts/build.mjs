@@ -2,10 +2,15 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 const DEFAULT_SUPABASE_URL = "https://bakcrmthmbbdnqmktfhy.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_91uUIn4MaVGlMscsRS9d-Q_7KzMF7SQ";
+const DEFAULT_PREVIEW_SUPABASE_URL = "https://kxlrtuqjclsvgchawzfe.supabase.co";
+const DEFAULT_PREVIEW_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_euxQSsquRBN86KmDNFCRzw_WVmBqfqp";
 
 function publicSupabaseConfig() {
-  const rawUrl = String(process.env.PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL).trim().replace(/\/+$/, "");
-  const key = String(process.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY).trim();
+  const isPreview = process.env.CONTEXT === "deploy-preview" || process.env.VERCEL_ENV === "preview";
+  const fallbackUrl = isPreview ? DEFAULT_PREVIEW_SUPABASE_URL : DEFAULT_SUPABASE_URL;
+  const fallbackKey = isPreview ? DEFAULT_PREVIEW_SUPABASE_PUBLISHABLE_KEY : DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+  const rawUrl = String(process.env.PUBLIC_SUPABASE_URL || fallbackUrl).trim().replace(/\/+$/, "");
+  const key = String(process.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY || fallbackKey).trim();
   let url;
   try {
     url = new URL(rawUrl);

@@ -68,6 +68,8 @@ test("la configuración de hosting bloquea scripts inline y publica trazabilidad
   assert.match(build, /dist\/release\.json/);
   assert.match(build, /PUBLIC_SUPABASE_URL/);
   assert.match(build, /PUBLIC_SUPABASE_PUBLISHABLE_KEY/);
+  assert.match(build, /CONTEXT === "deploy-preview"/);
+  assert.match(build, /DEFAULT_PREVIEW_SUPABASE_URL/);
   assert.match(app, /__GABRIEL_PUBLIC_API_URL__/);
   assert.match(app, /__GABRIEL_PUBLIC_API_KEY__/);
   assert.match(netlify, /connect-src 'self' https:\/\/\*\.supabase\.co/);

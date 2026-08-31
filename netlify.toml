@@ -5,6 +5,10 @@
 
 [build.environment]
   NODE_VERSION = "24"
+  # SUPABASE_URL identifica el endpoint público del proyecto; no contiene una
+  # credencial. Se excluye sólo esa variable para conservar activo el escaneo
+  # de claves administrativas y demás secretos.
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
 
 # Valores públicos y URL de servidor aislados para Pull Requests. Las claves
 # administrativas nunca se guardan aquí; sin una clave de staging válida, las

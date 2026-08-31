@@ -46,6 +46,8 @@ No reutilizar datos, credenciales o calendarios entre staging y producción.
 
 Ningún valor se copia a Git, al navegador, a logs o a este documento.
 
+Las únicas excepciones son la URL y la clave **publicable** de Supabase, que por diseño llegan al navegador. En `deploy-preview` ambas apuntan al proyecto de staging; `SUPABASE_URL` también se fuerza a staging para que una credencial de servidor heredada de otro contexto no pueda escribir en producción.
+
 ## Orden de publicación
 
 1. Verificar que el aviso conserva la identidad y el domicilio confirmados, y obtener revisión jurídica independiente antes del lanzamiento general.

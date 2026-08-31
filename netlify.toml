@@ -6,6 +6,14 @@
 [build.environment]
   NODE_VERSION = "24"
 
+# Valores públicos y URL de servidor aislados para Pull Requests. Las claves
+# administrativas nunca se guardan aquí; sin una clave de staging válida, las
+# funciones auxiliares fallan cerradas en vez de escribir en producción.
+[context.deploy-preview.environment]
+  PUBLIC_SUPABASE_URL = "https://kxlrtuqjclsvgchawzfe.supabase.co"
+  PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_euxQSsquRBN86KmDNFCRzw_WVmBqfqp"
+  SUPABASE_URL = "https://kxlrtuqjclsvgchawzfe.supabase.co"
+
 [[headers]]
   for = "/*"
   [headers.values]

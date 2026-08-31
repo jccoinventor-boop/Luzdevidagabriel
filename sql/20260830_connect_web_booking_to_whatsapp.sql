@@ -28,11 +28,11 @@ begin
     return;
   end if;
 
-  update public.gabriel_appointments
+  update public.gabriel_appointments as expired
   set status = 'cancelled', updated_at = now()
-  where status = 'hold'
-    and hold_expires_at is not null
-    and hold_expires_at <= now();
+  where expired.status = 'hold'
+    and expired.hold_expires_at is not null
+    and expired.hold_expires_at <= now();
 
   return query
   select

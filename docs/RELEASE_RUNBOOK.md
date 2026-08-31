@@ -19,6 +19,8 @@ No reutilizar datos, credenciales o calendarios entre staging y producción.
 
 ### Supabase
 
+- `PUBLIC_SUPABASE_URL` sólo para compilar el navegador contra el entorno correcto
+- `PUBLIC_SUPABASE_PUBLISHABLE_KEY` sólo clave pública del entorno; nunca una clave secreta
 - `SUPABASE_URL`
 - `SUPABASE_SECRET_KEYS` preferida para servidor
 - `SUPABASE_SERVICE_ROLE_KEY` sólo durante transición heredada

@@ -1,6 +1,6 @@
 const WA = "527122466811";
-const PUBLIC_API = "https://bakcrmthmbbdnqmktfhy.supabase.co/functions/v1/gabriel-public-api";
-const PUBLIC_API_KEY = "sb_publishable_91uUIn4MaVGlMscsRS9d-Q_7KzMF7SQ";
+const PUBLIC_API = "__GABRIEL_PUBLIC_API_URL__";
+const PUBLIC_API_KEY = "__GABRIEL_PUBLIC_API_KEY__";
 const PRIVACY_NOTICE_VERSION = "2026-08-31";
 const futureAppointmentExample = () => {
   const target = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);

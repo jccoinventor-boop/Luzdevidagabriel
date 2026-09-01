@@ -1,5 +1,23 @@
 {
   "product": "Luz de Vida Gabriel — piloto real controlado",
+  "stagingDrills": {
+    "edgeFunctionRollback": {
+      "status": "pass",
+      "date": "2026-09-01",
+      "sequence": [
+        { "version": 2, "artifactSha256": "d92b0ecc5cfec777890c6581fa1ff931ab9503e40a742d7d678e6601dbebdab1", "source": "corrected" },
+        { "version": 3, "artifactSha256": "9f39bcf69ed6a5a3453adacb4d93f025406f14e061efdc31244dcdc2da5f7a7a", "source": "previous-stable" },
+        { "version": 4, "artifactSha256": "d92b0ecc5cfec777890c6581fa1ff931ab9503e40a742d7d678e6601dbebdab1", "source": "recovered" }
+      ],
+      "finalState": "ACTIVE",
+      "productionTouched": false,
+      "verification": "Supabase version, active source and artifact hash; response header covered by automated test, not inspected over external HTTP in this drill."
+    },
+    "databaseRestore": {
+      "status": "not_run",
+      "reason": "Requires an authorized staging backup and an isolated restore target."
+    }
+  },
   "gates": [
     {
       "name": "Demanda",
@@ -29,7 +47,7 @@
       "name": "Operación",
       "status": "fail",
       "critical": true,
-      "evidence": "Se probó rollback y recuperación de cita, sesión, evento y Deploy Preview fuera de producción. Falta una restauración real de respaldo y una reversión de versión de la función Edge."
+      "evidence": "Se probó rollback y recuperación de cita, sesión, evento, Deploy Preview y función Edge fuera de producción. Falta una restauración real de respaldo en un proyecto aislado."
     },
     {
       "name": "Escala",

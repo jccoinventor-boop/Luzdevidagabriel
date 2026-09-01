@@ -2,7 +2,7 @@
 
 ## Regla principal
 
-Git debe ser la fuente de código. No publicar cambios manuales que después no queden reflejados en el repositorio. Cada deploy debe exponer su commit en `/release.json`.
+Git debe ser la fuente de código. No publicar cambios manuales que después no queden reflejados en el repositorio. Cada deploy web debe exponer su commit en `/release.json`. La función Edge debe responder con `x-gabriel-edge-version`, obtenido de `DENO_DEPLOYMENT_ID`; sólo se publica el número de versión, no el identificador interno completo.
 
 ## Entornos
 
@@ -59,7 +59,7 @@ Netlify excluye del escaneo únicamente `SUPABASE_URL`, porque su valor es un en
    - `sql/20260831_record_web_privacy_consent.sql`
    - `sql/20260830_connect_web_booking_to_whatsapp.sql`
 5. Ejecutar asesores de seguridad y rendimiento de Supabase después de las migraciones.
-6. Desplegar `gabriel-public-api` desde la misma revisión del repositorio.
+6. Desplegar `gabriel-public-api` desde la misma revisión del repositorio y registrar la versión y el hash del artefacto que Supabase marque como `ACTIVE`.
 7. Probar acción `consent`, rechazo sin consentimiento, límite de tasa y reserva duplicada con datos sintéticos.
 8. Verificar que una conversación nueva de WhatsApp muestra el aviso, no interpreta el primer mensaje como nombre y sólo continúa después de “Sí, acepto”.
 9. Crear Deploy Preview de Netlify desde Git y confirmar que `/release.json` muestra el commit esperado.
@@ -96,7 +96,7 @@ No crear una cita real durante un smoke test. La cita integrada se prueba en sta
 
 1. Detener campañas y mantener confirmación manual por WhatsApp.
 2. Restaurar en Netlify el deploy anterior conocido como estable.
-3. Restaurar la versión anterior de `gabriel-public-api` si el nuevo frontend ya no está activo.
+3. Volver a desplegar `gabriel-public-api` desde el commit estable anterior. Supabase crea una versión nueva con el código anterior; registrar versión, hash y commit en vez de suponer que la plataforma conserva un botón de rollback.
 4. No revertir automáticamente migraciones aditivas; mantener columnas y funciones compatibles mientras se investiga.
 5. Si una migración dañó datos, usar el respaldo verificado y el procedimiento autorizado de Supabase.
 6. Confirmar que el sitio, WhatsApp manual y el registro de prospectos funcionan en modo degradado.
@@ -113,8 +113,25 @@ El 2026-08-31 se completó una reversión de aplicación con datos sintéticos:
 5. se creó un evento nuevo y se recuperaron cita y sesión a `confirmed`;
 6. se eliminaron los eventos y registros sintéticos, y se verificaron cero rastros y el horario libre.
 7. el Deploy Preview se revirtió al árbol estable anterior y se recuperó al árbol actual; CI y Netlify aprobaron ambos artefactos.
+8. el 2026-09-01, la función Edge corregida se desplegó como versión 2 con hash `d92b0ecc5cfec777890c6581fa1ff931ab9503e40a742d7d678e6601dbebdab1`;
+9. el código estable anterior, tomado de Git, se volvió a desplegar como versión 3 con hash `9f39bcf69ed6a5a3453adacb4d93f025406f14e061efdc31244dcdc2da5f7a7a` y se comprobó que no contenía la nueva marca de versión;
+10. el código corregido se recuperó como versión 4, quedó `ACTIVE` y recuperó exactamente el hash de la versión 2. Supabase devolvió además el código activo con la autenticación publicable propia y la marca `DENO_DEPLOYMENT_ID` presentes.
 
-Este ensayo no sustituye una restauración de respaldo ni una reversión de versión de Supabase Edge Functions. Tampoco demuestra la entrega por WhatsApp Cloud API; esos puntos permanecen bloqueados.
+Las 53 pruebas automatizadas comprueban, entre otras cosas, que la respuesta sólo expone el número de versión Edge. El ensayo de despliegue verificó estado, código y hash mediante la administración de Supabase; no se pudo inspeccionar la cabecera mediante una solicitud HTTP externa desde este entorno.
+
+Este ensayo no sustituye una restauración real de respaldo de base de datos. Tampoco demuestra la entrega por WhatsApp Cloud API; esos puntos permanecen bloqueados.
+
+### Restauración de base de datos aún pendiente
+
+La prueba válida debe hacerse con credenciales autorizadas y una copia real de staging, nunca improvisando sobre producción:
+
+1. crear un respaldo de staging y registrar hora, tamaño, responsable y método;
+2. restaurarlo en un proyecto vacío y aislado;
+3. comparar migraciones y conteos esperados, y ejecutar una consulta sintética de lectura y escritura;
+4. documentar tiempo de recuperación, errores y evidencia de integridad;
+5. eliminar el proyecto de restauración cuando la evidencia haya sido aprobada.
+
+No se marca este punto como cumplido hasta ejecutar esos cinco pasos con acceso autorizado al respaldo.
 
 ## Ruta degradada
 

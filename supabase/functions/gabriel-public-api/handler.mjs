@@ -12,6 +12,7 @@ const MIN_NOTICE_MS = 15 * 60 * 1000;
 const MAX_ADVANCE_MS = 180 * 24 * 60 * 60 * 1000;
 const APPOINTMENT_DURATION_MS = 60 * 60 * 1000;
 const PRIVACY_NOTICE_VERSION = "2026-08-31";
+const EDGE_VERSION_HEADER = "x-gabriel-edge-version";
 const localWindows = new Map();
 
 const allowedOrigin = origin => !origin
@@ -20,18 +21,25 @@ const allowedOrigin = origin => !origin
   || origin === "https://bakcrmthmbbdnqmktfhy.supabase.co"
   || /^https:\/\/deploy-preview-\d+--luzdevidagabriel\.netlify\.app$/.test(origin);
 
-const corsHeaders = origin => ({
+function edgeVersion(value) {
+  const match = String(value || "").trim().match(/_([1-9]\d*)$/);
+  return match ? match[1] : "unknown";
+}
+
+const corsHeaders = (origin, version = "unknown") => ({
   ...(origin && allowedOrigin(origin) ? { "access-control-allow-origin": origin } : {}),
   "access-control-allow-headers": "apikey, content-type",
   "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-expose-headers": EDGE_VERSION_HEADER,
   "access-control-max-age": "86400",
+  [EDGE_VERSION_HEADER]: version,
   vary: "Origin"
 });
 
-const json = (status, body, origin = "") => new Response(JSON.stringify(body), {
+const json = (status, body, origin = "", version = "unknown") => new Response(JSON.stringify(body), {
   status,
   headers: {
-    ...corsHeaders(origin),
+    ...corsHeaders(origin, version),
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "x-content-type-options": "nosniff"
@@ -313,29 +321,33 @@ async function rpc(fetchFn, url, key, name, body) {
 }
 
 export function createHandler({ getEnv, fetchFn = fetch }) {
+  const version = edgeVersion(getEnv("DENO_DEPLOYMENT_ID"));
+  const respond = (status, body, origin = "") => json(status, body, origin, version);
+  const responseHeaders = origin => corsHeaders(origin, version);
+
   return async request => {
     const origin = request.headers.get("origin") || "";
-    if (!allowedOrigin(origin)) return json(403, { error: "origin_not_allowed" });
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
-    if (request.method !== "POST") return json(405, { error: "method_not_allowed" }, origin);
-    if (!hasValidPublishableKey(request, getEnv)) return json(401, { error: "invalid_api_key" }, origin);
+    if (!allowedOrigin(origin)) return respond(403, { error: "origin_not_allowed" });
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: responseHeaders(origin) });
+    if (request.method !== "POST") return respond(405, { error: "method_not_allowed" }, origin);
+    if (!hasValidPublishableKey(request, getEnv)) return respond(401, { error: "invalid_api_key" }, origin);
 
     let body;
     try {
       body = await readJsonBody(request);
     } catch (error) {
-      return json(error.status || 400, { error: error.message || "invalid_json" }, origin);
+      return respond(error.status || 400, { error: error.message || "invalid_json" }, origin);
     }
-    if (!body || typeof body !== "object" || Array.isArray(body)) return json(422, { error: "invalid_payload" }, origin);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return respond(422, { error: "invalid_payload" }, origin);
 
     const key = secretKey(getEnv);
     const url = getEnv("SUPABASE_URL") || "";
-    if (!key || !url) return json(503, { error: "storage_not_configured" }, origin);
+    if (!key || !url) return respond(503, { error: "storage_not_configured" }, origin);
     const hashedClient = await clientKey(request, key);
 
     try {
       if (body.action === "lead") {
-        if (locallyRateLimited(hashedClient, "telemetry")) return json(429, { error: "rate_limited" }, origin);
+        if (locallyRateLimited(hashedClient, "telemetry")) return respond(429, { error: "rate_limited" }, origin);
         const lead = validateLead(body);
         const result = await rpc(fetchFn, url, key, "gabriel_record_public_event", {
           p_client_key: hashedClient,
@@ -345,41 +357,41 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
           p_source: lead.source,
           p_attribution: lead.attribution
         });
-        if (result === "rate_limited") return json(429, { error: "rate_limited" }, origin);
-        if (result === "invalid") return json(422, { error: "invalid_payload" }, origin);
-        return json(202, { accepted: true }, origin);
+        if (result === "rate_limited") return respond(429, { error: "rate_limited" }, origin);
+        if (result === "invalid") return respond(422, { error: "invalid_payload" }, origin);
+        return respond(202, { accepted: true }, origin);
       }
 
       if (body.action === "consent") {
-        if (locallyRateLimited(hashedClient, "consent")) return json(429, { error: "rate_limited" }, origin);
+        if (locallyRateLimited(hashedClient, "consent")) return respond(429, { error: "rate_limited" }, origin);
         const consent = validateConsent(body);
         const result = await rpc(fetchFn, url, key, "gabriel_record_web_privacy_consent", {
           p_client_key: hashedClient,
           p_session_id: consent.sessionId,
           p_notice_version: consent.noticeVersion
         });
-        if (result === "rate_limited") return json(429, { error: "rate_limited" }, origin);
-        if (result === "invalid") return json(422, { error: "invalid_privacy_consent" }, origin);
-        return json(201, { accepted: true, noticeVersion: consent.noticeVersion }, origin);
+        if (result === "rate_limited") return respond(429, { error: "rate_limited" }, origin);
+        if (result === "invalid") return respond(422, { error: "invalid_privacy_consent" }, origin);
+        return respond(201, { accepted: true, noticeVersion: consent.noticeVersion }, origin);
       }
 
       if (body.action === "chat") {
-        if (locallyRateLimited(hashedClient, "qualified")) return json(429, { error: "rate_limited" }, origin);
+        if (locallyRateLimited(hashedClient, "qualified")) return respond(429, { error: "rate_limited" }, origin);
         const chat = validateChat(body);
         const consent = await rpc(fetchFn, url, key, "gabriel_record_web_privacy_consent", {
           p_client_key: hashedClient,
           p_session_id: chat.sessionId,
           p_notice_version: chat.privacyNoticeVersion
         });
-        if (consent === "rate_limited") return json(429, { error: "rate_limited" }, origin);
-        if (consent === "invalid") return json(422, { error: "invalid_privacy_consent" }, origin);
+        if (consent === "rate_limited") return respond(429, { error: "rate_limited" }, origin);
+        if (consent === "invalid") return respond(422, { error: "invalid_privacy_consent" }, origin);
         const turn = replayConversation(chat.messages);
         let storage = "not_needed";
         let booking = null;
         if (turn.qualified) {
-          if (!/^\d{10}$/.test(chat.phone)) return json(422, { error: "invalid_phone" }, origin);
+          if (!/^\d{10}$/.test(chat.phone)) return respond(422, { error: "invalid_phone" }, origin);
           const window = appointmentWindow(turn.lead.availability);
-          if (!window) return json(422, { error: "invalid_appointment_window" }, origin);
+          if (!window) return respond(422, { error: "invalid_appointment_window" }, origin);
           storage = await rpc(fetchFn, url, key, "gabriel_record_qualified_web_lead", {
             p_client_key: hashedClient,
             p_session_id: chat.sessionId,
@@ -390,8 +402,8 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
             p_phone: chat.phone,
             p_attribution: chat.attribution
           });
-          if (storage === "rate_limited") return json(429, { error: "rate_limited" }, origin);
-          if (storage === "invalid") return json(422, { error: "invalid_payload" }, origin);
+          if (storage === "rate_limited") return respond(429, { error: "rate_limited" }, origin);
+          if (storage === "invalid") return respond(422, { error: "invalid_payload" }, origin);
 
           const rows = await rpc(fetchFn, url, key, "gabriel_book_web_appointment", {
             p_client_key: hashedClient,
@@ -405,10 +417,10 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
             p_attribution: chat.attribution
           });
           const row = Array.isArray(rows) ? rows[0] : null;
-          if (!row || row.result === "invalid") return json(422, { error: "invalid_booking" }, origin);
-          if (row.result === "rate_limited") return json(429, { error: "rate_limited" }, origin);
+          if (!row || row.result === "invalid") return respond(422, { error: "invalid_booking" }, origin);
+          if (row.result === "rate_limited") return respond(429, { error: "rate_limited" }, origin);
           if (row.result === "unavailable") {
-            return json(409, {
+            return respond(409, {
               error: "slot_unavailable",
               message: "Ese horario ya no está disponible. Elige otra fecha y hora."
             }, origin);
@@ -422,7 +434,7 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
             result: row.result
           };
         }
-        return json(200, {
+        return respond(200, {
           message: booking
             ? `Tu horario quedó apartado durante 30 minutos para ${formatAppointment(new Date(booking.startsAt))}. Abre WhatsApp ahora para que Gabriel confirme los detalles y la forma de pago.`
             : turn.reply,
@@ -434,10 +446,10 @@ export function createHandler({ getEnv, fetchFn = fetch }) {
         }, origin);
       }
 
-      return json(422, { error: "action_not_allowed" }, origin);
+      return respond(422, { error: "action_not_allowed" }, origin);
     } catch (error) {
-      if (error?.status) return json(error.status, { error: error.message }, origin);
-      return json(502, { error: "storage_failed" }, origin);
+      if (error?.status) return respond(error.status, { error: error.message }, origin);
+      return respond(502, { error: "storage_failed" }, origin);
     }
   };
 }

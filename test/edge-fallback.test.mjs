@@ -44,6 +44,7 @@ test("la función Edge rechaza orígenes ajenos", async () => {
 test("la función Edge guarda un lead con la clave secreta sólo en apikey", async () => {
   const rpcRequests = [];
   const env = {
+    DENO_DEPLOYMENT_ID: "kxlrtuqjclsvgchawzfe_00000000-0000-0000-0000-000000000000_2",
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_SECRET_KEYS: JSON.stringify({ default: "sb_secret_test_only" }),
     SUPABASE_PUBLISHABLE_KEYS: JSON.stringify({ default: "sb_publishable_test_only" })
@@ -82,6 +83,8 @@ test("la función Edge guarda un lead con la clave secreta sólo en apikey", asy
   assert.ok(rpcRequests.every(item => item.options.headers.apikey === "sb_secret_test_only"));
   assert.ok(rpcRequests.every(item => item.options.headers.authorization === undefined));
   assert.equal(response.headers.get("access-control-allow-origin"), ORIGIN);
+  assert.equal(response.headers.get("x-gabriel-edge-version"), "2");
+  assert.match(response.headers.get("access-control-expose-headers"), /x-gabriel-edge-version/);
 });
 
 test("la función Edge registra consentimiento antes de pedir datos personales", async () => {

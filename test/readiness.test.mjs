@@ -51,6 +51,8 @@ test("el repositorio conserva las migraciones que ya existen en producción", as
   assert.match(classification, /gabriel_commit_whatsapp_turn/);
   assert.match(booking, /gabriel_book_web_appointment/);
   assert.match(edge, /gabriel_book_web_appointment/);
+  assert.match(edge, /DENO_DEPLOYMENT_ID/);
+  assert.match(edge, /x-gabriel-edge-version/);
 });
 
 test("la configuración de hosting bloquea scripts inline y publica trazabilidad", async () => {

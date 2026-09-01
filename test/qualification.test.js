@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { nextTurn, isExplicitAcceptance, isFinalBookingConfirmation, isRiskMessage } from "../netlify/functions/lib/qualification.mjs";
-import { incomingMessages, loadSession, processMessage } from "../netlify/functions/whatsapp.mjs";
+import { extractWebBookingCode, incomingMessages, loadSession, processMessage, whatsappPrivacyTurn } from "../netlify/functions/whatsapp.mjs";
 
 const FUTURE_AVAILABILITY = (() => {
   const target = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -84,6 +84,41 @@ test("extrae mensajes de texto del webhook de Meta", () => {
   assert.deepEqual(incomingMessages(payload), [{ from: "521234567890", id: "wamid.1", text: "Hola" }]);
 });
 
+test("WhatsApp informa y obtiene consentimiento antes de interpretar el nombre", () => {
+  const shownAt = new Date("2026-08-31T12:00:00.000Z");
+  const notice = whatsappPrivacyTurn(
+    { state: "awaiting_name", lead: {}, version: 0 },
+    "Hola Gabriel, quiero una consulta",
+    shownAt
+  );
+  assert.equal(notice.state, "awaiting_name");
+  assert.equal(notice.lead.name, undefined);
+  assert.equal(notice.lead.privacyNoticeShownAt, shownAt.toISOString());
+  assert.match(notice.reply, /aviso de privacidad/);
+
+  const acceptedAt = new Date("2026-08-31T12:01:00.000Z");
+  const accepted = whatsappPrivacyTurn(
+    { state: notice.state, lead: notice.lead, version: 1 },
+    "Sí, acepto",
+    acceptedAt
+  );
+  assert.equal(accepted.lead.privacyConsentAt, acceptedAt.toISOString());
+  assert.equal(accepted.lead.privacyConsentSource, "whatsapp_explicit");
+  assert.match(accepted.reply, /¿Cómo te llamas\?/);
+  assert.equal(whatsappPrivacyTurn({ state: accepted.state, lead: accepted.lead }, "Ana"), null);
+});
+
+test("WhatsApp prioriza una emergencia aunque falte consentimiento", () => {
+  assert.equal(whatsappPrivacyTurn({ state: "awaiting_name", lead: {} }, "Quiero quitarme la vida"), null);
+});
+
+test("extrae el código de una reserva web sin aceptar formatos ambiguos", () => {
+  assert.equal(extractWebBookingCode("Código: A1B2C3D4. Entiendo que Gabriel debe confirmar."), "A1B2C3D4");
+  assert.equal(extractWebBookingCode("codigo: 1234abcd"), "1234ABCD");
+  assert.equal(extractWebBookingCode("código: 1234"), null);
+  assert.equal(extractWebBookingCode("sin código"), null);
+});
+
 test("recupera el último identificador para ignorar reintentos de Meta", async () => {
   const originalFetch = globalThis.fetch;
   const originalUrl = process.env.SUPABASE_URL;
@@ -131,7 +166,15 @@ test("procesa WhatsApp con inbox, versión y outbox durable", async () => {
     calls.push(value);
     if (value.endsWith("rpc/gabriel_claim_whatsapp_message")) return new Response(JSON.stringify("claimed"), { status: 200 });
     if (value.includes("gabriel_whatsapp_sessions?")) {
-      return new Response(JSON.stringify([{ state: "awaiting_name", lead: {}, version: 0 }]), { status: 200 });
+      return new Response(JSON.stringify([{
+        state: "awaiting_name",
+        lead: {
+          privacyNoticeVersion: "2026-08-31",
+          privacyConsentAt: "2026-08-31T12:00:00.000Z",
+          privacyConsentSource: "whatsapp_explicit"
+        },
+        version: 0
+      }]), { status: 200 });
     }
     if (value.endsWith("rpc/gabriel_commit_whatsapp_turn")) {
       const body = JSON.parse(options.body);

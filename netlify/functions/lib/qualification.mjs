@@ -1,4 +1,4 @@
-import { parseAppointmentWindow } from "./calendar.mjs";
+import { appointmentInputExample, parseAppointmentWindow } from "./calendar.mjs";
 
 const RISK_PATTERN = /\b(suicid(?:io|a|arme|arte|arse|arnos|ando)?|quitar(?:me|te|se|nos)?\s+la\s+vida|acabar\s+con\s+mi\s+vida|no\s+quiero\s+vivir|quiero\s+morir|matarme|hacerme\s+daño|hacer\s+daño|violencia|amenaza|emergencia|secuestro|desaparecid[oa]|arma)\b/i;
 const YES_PATTERN = /^(sí|si|acepto|de acuerdo|estoy de acuerdo|confirmo)([,!. ]|$)/i;
@@ -63,11 +63,11 @@ export function nextTurn(session = {}, rawText = "") {
     const modality = /video/i.test(text) ? "Videollamada" : /presencial/i.test(text) ? "Presencial" : /tel[eé]fono|llamada/i.test(text) ? "Teléfono" : null;
     if (!modality) return same(state, lead, "Elige una modalidad: teléfono, videollamada o presencial.");
     lead.modality = modality;
-    return same("awaiting_availability", lead, "Indica fecha y hora como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: 22/08/2026 17:00.");
+    return same("awaiting_availability", lead, `Indica fecha y hora como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: ${appointmentInputExample()}.`);
   }
 
   if (state === "awaiting_availability") {
-    if (!parseAppointmentWindow(text)) return same(state, lead, "Necesito una fecha futura válida como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: 22/08/2026 17:00.");
+    if (!parseAppointmentWindow(text)) return same(state, lead, `Necesito una fecha futura válida como DD/MM/AAAA HH:MM, usando 24 horas. Ejemplo: ${appointmentInputExample()}.`);
     lead.availability = text.slice(0, 200);
     return same(
       "awaiting_final_confirmation",

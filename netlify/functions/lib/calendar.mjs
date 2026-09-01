@@ -65,6 +65,12 @@ export function parseAppointmentWindow(value, now = new Date(), timezone = BUSIN
   return { start, end: new Date(start.getTime() + durationMinutes * 60 * 1000), timezone, durationMinutes };
 }
 
+export function appointmentInputExample(now = new Date(), timezone = BUSINESS_TIMEZONE) {
+  const target = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const parts = timezoneParts(target, timezone);
+  return `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}/${parts.year} 17:00`;
+}
+
 export function calendarConfiguration() {
   const calendarId = environmentValue("GOOGLE_CALENDAR_ID")?.trim();
   const projectId = environmentValue("GCP_PROJECT_ID")?.trim();
@@ -197,11 +203,28 @@ async function calendarIsFree(window) {
 
 async function rpc(name, parameters) {
   const url = environmentValue("SUPABASE_URL");
-  const key = environmentValue("SUPABASE_SERVICE_ROLE_KEY");
+  let key = "";
+  let legacy = false;
+  const modern = environmentValue("SUPABASE_SECRET_KEYS");
+  if (modern) {
+    try {
+      key = JSON.parse(modern).default || "";
+    } catch {
+      // La clave heredada se conserva únicamente durante la transición.
+    }
+  }
+  if (!key) {
+    key = environmentValue("SUPABASE_SERVICE_ROLE_KEY") || "";
+    legacy = Boolean(key);
+  }
   if (!url || !key) throw new Error("supabase_not_configured");
   const response = await fetch(`${url}/rest/v1/rpc/${name}`, {
     method: "POST",
-    headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" },
+    headers: {
+      apikey: key,
+      ...(legacy ? { authorization: `Bearer ${key}` } : {}),
+      "content-type": "application/json"
+    },
     body: JSON.stringify(parameters)
   });
   if (!response.ok) throw new Error(`${name}_failed_${response.status}`);
@@ -210,6 +233,16 @@ async function rpc(name, parameters) {
 
 function deterministicEventId(messageId) {
   return `gabriel${crypto.createHash("sha256").update(messageId).digest("hex").slice(0, 48)}`;
+}
+
+async function readExistingEvent(messageId) {
+  const { calendarId } = calendarConfiguration();
+  const eventId = deterministicEventId(messageId);
+  const encodedCalendar = encodeURIComponent(calendarId);
+  const response = await googleRequest(`/calendars/${encodedCalendar}/events/${eventId}`);
+  if (response.ok) return response.json();
+  if (response.status === 404) return null;
+  throw new Error(`calendar_event_read_failed_${response.status}`);
 }
 
 async function createOrReadEvent(messageId, lead, phone, window) {
@@ -257,13 +290,98 @@ function pendingTurn(turn, reply, state = "qualified_pending_slot", qualified = 
   return { ...turn, state, qualified, reply };
 }
 
+function webBookingWindow(booking) {
+  const start = new Date(booking?.starts_at || "");
+  const end = new Date(booking?.ends_at || "");
+  const durationMinutes = (end.getTime() - start.getTime()) / 60_000;
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())
+    || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 240) return null;
+  return { start, end, timezone: BUSINESS_TIMEZONE, durationMinutes };
+}
+
+function webBookingTurn(booking) {
+  return {
+    state: "qualified_pending_slot",
+    qualified: true,
+    lead: {
+      name: booking.customer_name,
+      topic: booking.topic,
+      priceAccepted: true,
+      modality: booking.modality,
+      availability: booking.starts_at,
+      finalConfirmation: "SÍ CONFIRMO MI CITA",
+      bookingConfirmedIntent: true,
+      webBookingId: booking.appointment_id,
+      privacyNoticeVersion: "2026-08-31",
+      privacyConsentSource: "web_recorded"
+    },
+    reply: "Solicitud web localizada y pendiente de confirmación."
+  };
+}
+
+export async function confirmWebBooking(message, booking) {
+  const turn = webBookingTurn(booking);
+  const window = webBookingWindow(booking);
+  if (!window) {
+    return pendingTurn(turn, "Encontré la solicitud, pero el horario guardado no es válido. Gabriel deberá revisarla personalmente.", "human_handoff", false);
+  }
+  if (booking.appointment_status === "confirmed" && booking.google_event_id) {
+    return {
+      ...turn,
+      state: "confirmed",
+      lead: { ...turn.lead, appointmentStartsAt: window.start.toISOString(), googleEventId: booking.google_event_id },
+      reply: `Tu cita ya está confirmada para ${formatWindow(window)}. Modalidad: ${booking.modality}. Costo: $100 MXN.`
+    };
+  }
+  if (!calendarConfiguration().configured) {
+    return pendingTurn(turn, "Encontré tu horario apartado, pero Calendar todavía no pudo confirmarlo. Gabriel lo revisará personalmente; no lo consideres confirmado aún.");
+  }
+
+  const eventKey = `web:${booking.appointment_id}`;
+  let createdGoogleEventId = null;
+  try {
+    let event = await readExistingEvent(eventKey);
+    if (!event) {
+      if (!(await calendarIsFree(window))) {
+        await rpc("gabriel_release_appointment", { p_appointment_id: booking.appointment_id }).catch(() => false);
+        return pendingTurn(
+          turn,
+          "El horario apartado en la web ya no está libre en Calendar. No quedó confirmado; escribe otra fecha y hora para que Gabriel la revise.",
+          "awaiting_availability",
+          false
+        );
+      }
+      event = await createOrReadEvent(eventKey, turn.lead, message.from, window);
+      createdGoogleEventId = event.id;
+    }
+    const confirmed = await rpc("gabriel_confirm_appointment", {
+      p_appointment_id: booking.appointment_id,
+      p_google_event_id: event.id
+    });
+    if (confirmed !== true) throw new Error("appointment_confirmation_failed");
+    return {
+      ...turn,
+      state: "confirmed",
+      lead: { ...turn.lead, appointmentStartsAt: window.start.toISOString(), googleEventId: event.id },
+      reply: `Tu cita quedó confirmada para ${formatWindow(window)}. Modalidad: ${booking.modality}. Costo: $100 MXN. Si necesitas cambiarla, escribe REAGENDAR.`
+    };
+  } catch {
+    return pendingTurn(
+      turn,
+      createdGoogleEventId
+        ? "Calendar recibió la cita, pero la confirmación interna quedó pendiente. Gabriel la revisará antes de prometerte el horario."
+        : "Encontré tu solicitud, pero Calendar no pudo confirmarla. Gabriel la revisará personalmente; no la consideres confirmada todavía."
+    );
+  }
+}
+
 export async function autoBookQualifiedTurn(message, turn) {
   if (!turn.qualified) return turn;
   const window = parseAppointmentWindow(turn.lead?.availability);
   if (!window) {
     return pendingTurn(
       turn,
-      "No pude interpretar el horario con seguridad. Envíalo como DD/MM/AAAA HH:MM en formato de 24 horas; por ejemplo: 22/08/2026 17:00.",
+      `No pude interpretar el horario con seguridad. Envíalo como DD/MM/AAAA HH:MM en formato de 24 horas; por ejemplo: ${appointmentInputExample()}.`,
       "awaiting_availability",
       false
     );
@@ -271,12 +389,14 @@ export async function autoBookQualifiedTurn(message, turn) {
   if (!calendarConfiguration().configured) return turn;
 
   let hold = null;
-  let createdGoogleEventId = null;
+  let observedGoogleEventId = null;
   try {
-    if (!(await calendarIsFree(window))) {
+    const existingEvent = await readExistingEvent(message.id);
+    observedGoogleEventId = existingEvent?.id || null;
+    if (!existingEvent && !(await calendarIsFree(window))) {
       return pendingTurn(
         turn,
-        "Ese horario ya está ocupado. Envíame otra opción como DD/MM/AAAA HH:MM en formato de 24 horas.",
+        `Ese horario ya está ocupado. Envíame otra opción como ${appointmentInputExample()} en formato de 24 horas.`,
         "awaiting_availability",
         false
       );
@@ -296,7 +416,7 @@ export async function autoBookQualifiedTurn(message, turn) {
     if (!hold || hold.result === "unavailable" || hold.result === "invalid") {
       return pendingTurn(
         turn,
-        "Ese horario dejó de estar disponible. Envíame otra opción como DD/MM/AAAA HH:MM en formato de 24 horas.",
+        `Ese horario dejó de estar disponible. Envíame otra opción como ${appointmentInputExample()} en formato de 24 horas.`,
         "awaiting_availability",
         false
       );
@@ -313,11 +433,15 @@ export async function autoBookQualifiedTurn(message, turn) {
       );
     }
 
-    let googleEventId = hold.google_event_id;
+    let googleEventId = hold.google_event_id || existingEvent?.id;
     if (!googleEventId) {
       const event = await createOrReadEvent(message.id, turn.lead, message.from, window);
       googleEventId = event.id;
-      createdGoogleEventId = googleEventId;
+      observedGoogleEventId = googleEventId;
+    }
+
+    const alreadyCommitted = hold.appointment_status === "confirmed" && hold.google_event_id === googleEventId;
+    if (!alreadyCommitted) {
       const confirmed = await rpc("gabriel_confirm_appointment", {
         p_appointment_id: hold.appointment_id,
         p_google_event_id: googleEventId
@@ -337,7 +461,7 @@ export async function autoBookQualifiedTurn(message, turn) {
       reply: `Tu cita quedó confirmada para ${formatWindow(window)}. Modalidad: ${turn.lead.modality}. Costo: $100 MXN. Si necesitas cambiarla, escribe REAGENDAR.`
     };
   } catch {
-    if (hold?.appointment_id && !createdGoogleEventId) {
+    if (hold?.appointment_id && !observedGoogleEventId) {
       await rpc("gabriel_release_appointment", {
         p_appointment_id: hold.appointment_id
       }).catch(() => false);

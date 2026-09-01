@@ -58,13 +58,26 @@ export function toDatabaseRecord(body) {
 }
 
 async function recordEvent(request, body) {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return "accepted";
+  let key = "";
+  let legacy = false;
+  if (process.env.SUPABASE_SECRET_KEYS) {
+    try {
+      key = JSON.parse(process.env.SUPABASE_SECRET_KEYS).default || "";
+    } catch {
+      // Se usa la clave heredada únicamente durante la transición.
+    }
+  }
+  if (!key) {
+    key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    legacy = Boolean(key);
+  }
+  if (!process.env.SUPABASE_URL || !key) return "accepted";
 
   const response = await fetch(`${process.env.SUPABASE_URL}/rest/v1/rpc/gabriel_record_public_event`, {
     method: "POST",
     headers: {
-      apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: key,
+      ...(legacy ? { authorization: `Bearer ${key}` } : {}),
       "content-type": "application/json"
     },
     body: JSON.stringify({

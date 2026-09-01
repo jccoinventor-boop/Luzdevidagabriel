@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs && node --check netlify/functions/whatsapp.mjs && node --check netlify/functions/lib/calendar.mjs && node --check netlify/functions/lib/qualification.mjs && node --check netlify/functions/lib/request-security.mjs && node --check supabase/functions/gabriel-public-api/handler.mjs && node --check api/lead.mjs && node --check api/chat.mjs && node --check api/whatsapp.mjs",
+    "check": "node --check public/app.js && node --check netlify/functions/lead.mjs && node --check netlify/functions/chat.mjs && node --check netlify/functions/whatsapp.mjs && node --check netlify/functions/lib/calendar.mjs && node --check netlify/functions/lib/qualification.mjs && node --check netlify/functions/lib/request-security.mjs && node --check supabase/functions/gabriel-public-api/handler.mjs && node --check api/lead.mjs && node --check api/chat.mjs && node --check api/whatsapp.mjs && node --check scripts/build.mjs",
     "build": "node scripts/build.mjs"
   },
   "dependencies": {
@@ -13,6 +13,6 @@
     "google-auth-library": "11.0.2"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }

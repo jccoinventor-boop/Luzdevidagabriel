@@ -1,0 +1,59 @@
+{
+  "product": "Luz de Vida Gabriel — piloto real controlado",
+  "stagingDrills": {
+    "edgeFunctionRollback": {
+      "status": "pass",
+      "date": "2026-09-01",
+      "sequence": [
+        { "version": 2, "artifactSha256": "d92b0ecc5cfec777890c6581fa1ff931ab9503e40a742d7d678e6601dbebdab1", "source": "corrected" },
+        { "version": 3, "artifactSha256": "9f39bcf69ed6a5a3453adacb4d93f025406f14e061efdc31244dcdc2da5f7a7a", "source": "previous-stable" },
+        { "version": 4, "artifactSha256": "d92b0ecc5cfec777890c6581fa1ff931ab9503e40a742d7d678e6601dbebdab1", "source": "recovered" }
+      ],
+      "finalState": "ACTIVE",
+      "productionTouched": false,
+      "verification": "Supabase version, active source and artifact hash; response header covered by automated test, not inspected over external HTTP in this drill."
+    },
+    "databaseRestore": {
+      "status": "not_run",
+      "reason": "Requires an authorized staging backup and an isolated restore target."
+    }
+  },
+  "gates": [
+    {
+      "name": "Demanda",
+      "status": "unknown",
+      "critical": false,
+      "evidence": "El precio de 100 MXN está confirmado, pero esta revisión no encontró evidencia verificable de conversaciones reales, citas completadas o pagos. El piloto limitado debe medirlos."
+    },
+    {
+      "name": "Alcance",
+      "status": "pass",
+      "critical": true,
+      "evidence": "El flujo mínimo, sus estados, el criterio de confirmación, las exclusiones y la regla comercial están documentados en PRODUCTION_READINESS.md y RELEASE_RUNBOOK.md."
+    },
+    {
+      "name": "Riesgo",
+      "status": "fail",
+      "critical": true,
+      "evidence": "El consentimiento, RLS, HMAC y separación de entornos están implementados, pero falta una revisión jurídica independiente del aviso de privacidad antes de usar datos reales."
+    },
+    {
+      "name": "Técnica",
+      "status": "fail",
+      "critical": true,
+      "evidence": "Las 53 pruebas, el CI, el preview, las migraciones de staging, Calendar real e idempotencia pasaron. Aún no se probó el recorrido por el webhook y Graph API oficiales de Meta ni la cuenta de servicio de Calendar de la función desplegada."
+    },
+    {
+      "name": "Operación",
+      "status": "fail",
+      "critical": true,
+      "evidence": "Se probó rollback y recuperación de cita, sesión, evento, Deploy Preview y función Edge fuera de producción. Falta una restauración real de respaldo en un proyecto aislado."
+    },
+    {
+      "name": "Escala",
+      "status": "not_applicable",
+      "critical": false,
+      "evidence": "No se evalúa escala hasta medir al menos 30 conversaciones relevantes y la aceptación de pago del piloto."
+    }
+  ]
+}
